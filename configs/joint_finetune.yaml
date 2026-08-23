@@ -1,0 +1,24 @@
+# Joint Fine-Tuning (Experiment E - Advanced / Optional) Configuration
+data:
+  image_dir: null
+  mask_dir: null
+  image_size: 128
+  synthetic_size: 200
+
+model:
+  base_channels: 32
+  strategy_dim: 64
+  latent_dim: 256
+  checkpoint_gan: "checkpoints/gan_baseline/best_model.pt"
+  checkpoint_rl: "checkpoints/rl_agent_bandit/ppo_bandit_final.zip"
+
+training:
+  epochs: 3
+  lr_g: 0.00005              # Lower learning rate for fine-tuning stability
+  lr_d: 0.00005
+  rl_steps_per_epoch: 512
+  max_divergence_loss: 25.0  # Guardrail against collapse
+  device: "cpu"
+  seed: 42
+  save_dir: "checkpoints/joint_finetune"
+  log_dir: "logs/joint_finetune"

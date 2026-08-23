@@ -1,0 +1,30 @@
+# RL Multi-Step Refinement with STOP (Version 2) Configuration
+data:
+  image_dir: null
+  mask_dir: null
+  image_size: 128
+  synthetic_size: 200
+
+model:
+  base_channels: 32
+  strategy_dim: 64
+  latent_dim: 256
+  checkpoint_gan: "checkpoints/gan_baseline/best_model.pt"
+
+rl:
+  max_steps: 4
+  total_timesteps: 5000
+  n_steps: 128
+  batch_size: 32
+  n_epochs: 4
+  learning_rate: 0.0003
+  gamma: 0.95                # Discount future refinement gains
+  ent_coef: 0.02             # Exploration over 5 actions
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  reward_weights: [1.0, 1.0, 0.5, 0.5, 0.3]
+  compute_lpips: false
+  device: "cpu"
+  seed: 42
+  save_dir: "checkpoints/rl_agent_multistep"
+  log_dir: "logs/rl_agent_multistep"

@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: rl-gan-inpainting
+Version: 0.1.0
+Summary: Adaptive Image Inpainting using Reinforcement Learning Guided GAN (RL-GAN)
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: torch==2.8.0+cpu
+Requires-Dist: torchvision==0.23.0+cpu
+Requires-Dist: stable-baselines3>=2.2.0
+Requires-Dist: gymnasium>=0.29.0
+Requires-Dist: opencv-python>=4.8.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: scikit-image>=0.21.0
+Requires-Dist: lpips>=0.1.4
+Requires-Dist: pytorch-fid>=0.3.0
+Requires-Dist: tensorboard>=2.15.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: tqdm>=4.66.0
+Requires-Dist: pytest>=7.4.0
+Requires-Dist: pillow>=10.0.0
+
+# rl-gan-inpainting
+Adaptive image inpainting where a PPO-trained RL agent selects the GAN's restoration strategy per mask, instead of using one fixed adversarial loss for every case..

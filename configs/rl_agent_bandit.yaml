@@ -1,0 +1,29 @@
+# RL Contextual Bandit (Experiment B) Configuration
+data:
+  image_dir: null            # Path to dataset or null for synthetic procedural data
+  mask_dir: null
+  image_size: 128
+  synthetic_size: 200
+
+model:
+  base_channels: 32
+  strategy_dim: 64
+  latent_dim: 256
+  checkpoint_gan: "checkpoints/gan_baseline/best_model.pt"
+
+rl:
+  total_timesteps: 5000      # Fast run for development, scale up with CLI
+  n_steps: 128
+  batch_size: 32
+  n_epochs: 4
+  learning_rate: 0.0003
+  gamma: 0.0                 # 0.0 for 1-step contextual bandit
+  ent_coef: 0.01             # Encourage strategy exploration
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  reward_weights: [1.0, 1.0, 0.5, 0.5, 0.3]  # (dPSNR, dSSIM, dLPIPS, dDisc, cost)
+  compute_lpips: false       # Set true for full perceptual reward
+  device: "cpu"
+  seed: 42
+  save_dir: "checkpoints/rl_agent_bandit"
+  log_dir: "logs/rl_agent_bandit"
