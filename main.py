@@ -7,7 +7,7 @@ import torchvision.transforms as T
 
 from src.data.mask_generator import generate_fixed_eval_masks
 from src.data.dataset import InpaintingDataset
-from src.data.transforms import denormalize_image
+from src.data.transforms import denormalize_image, feather_composite
 from src.models.generator import InpaintingGenerator
 from src.models.discriminator import SNPatchGANDiscriminator
 from src.training.pretrain_gan import train_gan_baseline
@@ -110,7 +110,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
 
         # Fixed baseline
         gan_out = generator(masked_image, mask, strategy=None)
-        gan_comp = gan_out["completed"]
+        gan_comp = feather_composite(image, gan_out["completed"], mask)
 
         # RL Adaptive
         chosen_action = 0
@@ -124,7 +124,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
             chosen_action = int(act)
 
         rl_refined = generator.refine(coarse_comp, mask, strategy=chosen_action)
-        rl_comp = masked_image + rl_refined * mask
+        rl_comp = feather_composite(image, rl_refined, mask)
 
     # Convert to PIL images for visualization grid
     img_gt = Image.fromarray(denormalize_image(image[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
@@ -185,24 +185,24 @@ def main() -> None:
 
     # Command: evaluate
     p_eval = subparsers.add_parser("evaluate", help="Benchmark evaluation across models and severity buckets")
-    p_eval.add_argument("--data-dir", type=str, default=None)
+    p_eval.add_argument("--data-dir", type=str, default="data/raw/sample_images")
     p_eval.add_argument("--mask-dir", type=str, default=None)
     p_eval.add_argument("--gan-checkpoint", type=str, default="checkpoints/gan_baseline/best_model.pt")
     p_eval.add_argument("--rl-checkpoint", type=str, default="checkpoints/rl_agent_bandit/ppo_bandit_final.zip")
     p_eval.add_argument("--output-dir", type=str, default="results")
     p_eval.add_argument("--image-size", type=int, default=128)
     p_eval.add_argument("--samples", type=int, default=30)
-    p_eval.add_argument("--device", type=str, default="cpu")
+    p_eval.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
 
     # Command: demo
     p_demo = subparsers.add_parser("demo", help="Generate side-by-side demo comparison")
-    p_demo.add_argument("--image-dir", type=str, default=None)
+    p_demo.add_argument("--image-dir", type=str, default="data/raw/sample_images")
     p_demo.add_argument("--gan-checkpoint", type=str, default="checkpoints/gan_baseline/best_model.pt")
     p_demo.add_argument("--rl-checkpoint", type=str, default="checkpoints/rl_agent_bandit/ppo_bandit_final.zip")
     p_demo.add_argument("--output-dir", type=str, default="results")
     p_demo.add_argument("--sample-idx", type=int, default=0)
     p_demo.add_argument("--image-size", type=int, default=128)
-    p_demo.add_argument("--device", type=str, default="cpu")
+    p_demo.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
 
     args = parser.parse_args()
 

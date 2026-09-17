@@ -47,7 +47,7 @@ class InpaintingDataset(Dataset):
         # Collect image filepaths
         self.image_paths: List[str] = []
         if image_dir and os.path.exists(image_dir):
-            for ext in ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp"]:
+            for ext in ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp", "*.avif"]:
                 self.image_paths.extend(glob.glob(os.path.join(image_dir, "**", ext), recursive=True))
             self.image_paths.sort()
 
@@ -97,7 +97,10 @@ class InpaintingDataset(Dataset):
             path = f"synthetic_{index:05d}"
         else:
             path = self.image_paths[index % len(self.image_paths)]
-            pil_img = Image.open(path).convert("RGB")
+            try:
+                pil_img = Image.open(path).convert("RGB")
+            except Exception:
+                pil_img = self._generate_synthetic_image(index)
 
         tensor = self.transform(pil_img)
         return tensor, path
@@ -118,9 +121,9 @@ class InpaintingDataset(Dataset):
             mask_np = generate_irregular_mask(
                 self.image_size,
                 self.image_size,
-                max_strokes=8,
-                max_len=80,
-                max_width=30,
+                max_strokes=4,
+                max_len=max(20, int(self.image_size * 0.35)),
+                max_width=max(8, int(self.image_size * 0.12)),
                 rng=rng,
             )
 

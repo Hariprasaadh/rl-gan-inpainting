@@ -100,25 +100,28 @@ def generate_irregular_mask(
 
     mask = np.zeros((h, w), dtype=np.uint8)
     num_strokes = rng.integers(min_strokes, max(min_strokes + 1, max_strokes + 1))
+    pad_x = int(w * 0.10)
+    pad_y = int(h * 0.10)
 
     for _ in range(num_strokes):
-        x, y = int(rng.integers(0, w)), int(rng.integers(0, h))
-        num_sub_strokes = rng.integers(3, 16)
+        x = int(rng.integers(pad_x, max(pad_x + 1, w - pad_x)))
+        y = int(rng.integers(pad_y, max(pad_y + 1, h - pad_y)))
+        num_sub_strokes = rng.integers(2, 6)
         for _ in range(num_sub_strokes):
             angle = rng.uniform(0, 2 * np.pi)
             length = rng.integers(10, max(11, max_len))
-            width = rng.integers(5, max(6, max_width))
-            x2 = int(np.clip(x + length * np.cos(angle), 0, w - 1))
-            y2 = int(np.clip(y + length * np.sin(angle), 0, h - 1))
+            width = rng.integers(4, max(5, max_width))
+            x2 = int(np.clip(x + length * np.cos(angle), pad_x, w - pad_x - 1))
+            y2 = int(np.clip(y + length * np.sin(angle), pad_y, h - pad_y - 1))
             cv2.line(mask, (x, y), (x2, y2), 1, int(width))
             x, y = x2, y2
 
-    # Occasionally add a circle or rectangle for diversity
-    if rng.random() > 0.6:
-        cx, cy = int(rng.integers(w // 4, max(w // 4 + 1, 3 * w // 4))), int(rng.integers(h // 4, max(h // 4 + 1, 3 * h // 4)))
-        max_r = max(4, min(h, w) // 4)
-        min_r = max(2, min(3, max_r - 1))
-        radius = int(rng.integers(min_r, max_r + 1))
+    # Occasionally add a circle inside the padded boundary
+    if rng.random() > 0.7:
+        cx = int(rng.integers(pad_x + 5, max(pad_x + 6, w - pad_x - 5)))
+        cy = int(rng.integers(pad_y + 5, max(pad_y + 6, h - pad_y - 5)))
+        max_r = max(4, min(h, w) // 6)
+        radius = int(rng.integers(3, max(4, max_r)))
         cv2.circle(mask, (cx, cy), radius, 1, -1)
 
     # Ensure mask has at least some missing pixels

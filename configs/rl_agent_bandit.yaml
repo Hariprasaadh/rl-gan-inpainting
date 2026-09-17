@@ -1,6 +1,6 @@
 # RL Contextual Bandit (Experiment B) Configuration
 data:
-  image_dir: null            # Path to dataset or null for synthetic procedural data
+  image_dir: "data/raw/sample_images"
   mask_dir: null
   image_size: 128
   synthetic_size: 200
@@ -12,9 +12,9 @@ model:
   checkpoint_gan: "checkpoints/gan_baseline/best_model.pt"
 
 rl:
-  total_timesteps: 5000      # Fast run for development, scale up with CLI
-  n_steps: 128
-  batch_size: 32
+  total_timesteps: 1000      # Fast run for development, scale up with CLI
+  n_steps: 64
+  batch_size: 16
   n_epochs: 4
   learning_rate: 0.0003
   gamma: 0.0                 # 0.0 for 1-step contextual bandit
@@ -23,7 +23,7 @@ rl:
   max_grad_norm: 0.5
   reward_weights: [1.0, 1.0, 0.5, 0.5, 0.3]  # (dPSNR, dSSIM, dLPIPS, dDisc, cost)
   compute_lpips: false       # Set true for full perceptual reward
-  device: "cpu"
+  device: "cuda"
   seed: 42
   save_dir: "checkpoints/rl_agent_bandit"
   log_dir: "logs/rl_agent_bandit"

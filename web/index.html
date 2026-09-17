@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RL-GAN: Adaptive Image Inpainting Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Navigation Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-badge">
+          <span class="logo-icon">⚡</span>
+          <div class="logo-text">
+            <h1>RL-GAN Studio</h1>
+            <span class="subtitle">Reinforcement Learning Guided DeepFill v2 Inpainting</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-pill online">
+          <span class="dot"></span>
+          <span class="status-text">RTX 3050 GPU Active</span>
+        </div>
+        <div class="status-pill agent">
+          <span class="agent-badge">PPO Bandit</span>
+          <span class="status-text">261-D Policy Loaded</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="workspace-grid">
+      <!-- Left: Interactive Canvas & Controls -->
+      <section class="panel control-panel">
+        <div class="panel-header">
+          <h2>1. Source & Mask Studio</h2>
+          <span class="badge">Canvas</span>
+        </div>
+
+        <!-- Presets Selection Bar -->
+        <div class="presets-section">
+          <label class="section-label">Select Sample Photograph or Upload</label>
+          <div class="preset-cards" id="presetCards">
+            <!-- Populated dynamically via JS -->
+          </div>
+          <div class="upload-row">
+            <label for="fileUpload" class="btn btn-secondary upload-btn">
+              <span>📁 Upload Custom Photo</span>
+              <input type="file" id="fileUpload" accept="image/*" style="display: none;">
+            </label>
+          </div>
+        </div>
+
+        <!-- Drawing Canvas Area -->
+        <div class="canvas-wrapper">
+          <div class="canvas-container" id="canvasContainer">
+            <img id="sourceImage" alt="Target" crossOrigin="anonymous">
+            <canvas id="maskCanvas" width="256" height="256"></canvas>
+            <div class="canvas-crosshair" id="canvasCursor"></div>
+          </div>
+        </div>
+
+        <!-- Brush & Action Controls -->
+        <div class="tools-toolbar">
+          <div class="brush-control">
+            <label for="brushSize">Brush Size: <span id="brushSizeVal">20px</span></label>
+            <input type="range" id="brushSize" min="6" max="48" value="20">
+          </div>
+          <div class="button-group">
+            <button class="btn btn-sm btn-ghost" id="btnClearMask" title="Clear Mask">Clear</button>
+            <button class="btn btn-sm btn-outline" id="btnRandomMask" title="Add Organic Defect">✨ Random Mask</button>
+          </div>
+        </div>
+
+        <!-- Mode Selection & Submit Button -->
+        <div class="action-footer">
+          <div class="mode-toggle-row">
+            <label class="radio-label">
+              <input type="radio" name="inferMode" value="precision" checked>
+              <span class="radio-custom"></span>
+              <span>Ultra-Precision (Perceptual Detail)</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="inferMode" value="fast">
+              <span class="radio-custom"></span>
+              <span>Instant Forward Pass (15ms)</span>
+            </label>
+          </div>
+          <button class="btn btn-primary run-btn" id="btnInpaint">
+            <span class="btn-text">🚀 Run RL-GAN Inpainting</span>
+            <span class="btn-spinner" id="btnSpinner"></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Right: Real-time Telemetry & Before/After Reveal Slider -->
+      <section class="panel results-panel">
+        <div class="panel-header">
+          <h2>2. Live Result & Policy Telemetry</h2>
+          <div class="view-toggles">
+            <button class="toggle-btn active" id="btnViewSplit">Interactive Slider</button>
+            <button class="toggle-btn" id="btnViewPipeline">5-Stage Pipeline</button>
+          </div>
+        </div>
+
+        <!-- Before / After Interactive Split Slider View -->
+        <div class="view-container" id="splitViewContainer">
+          <div class="split-slider-box" id="splitSliderBox">
+            <img id="splitResultImg" class="split-img result-layer" src="" alt="RL-GAN Result">
+            <div class="split-damaged-wrapper" id="splitDamagedWrapper">
+              <img id="splitDamagedImg" class="split-img damaged-layer" src="" alt="Damaged Input">
+            </div>
+            <!-- Vertical Divider Handle -->
+            <div class="split-divider" id="splitDivider">
+              <div class="split-handle">
+                <span class="arrow-left">◀</span>
+                <span class="arrow-right">▶</span>
+              </div>
+            </div>
+            <div class="slider-label label-left">Damaged Input</div>
+            <div class="slider-label label-right">RL-GAN Reconstructed</div>
+          </div>
+        </div>
+
+        <!-- 5-Stage Progressive Pipeline View (Alternate Tab) -->
+        <div class="view-container" id="pipelineViewContainer" style="display: none;">
+          <div class="pipeline-grid">
+            <div class="pipeline-card">
+              <span class="pipe-tag">1. Ground Truth</span>
+              <img id="pipeGt" alt="GT">
+            </div>
+            <div class="pipeline-card">
+              <span class="pipe-tag">2. Masked Input</span>
+              <img id="pipeMasked" alt="Masked">
+            </div>
+            <div class="pipeline-card">
+              <span class="pipe-tag">3. Coarse Pass</span>
+              <img id="pipeCoarse" alt="Coarse">
+            </div>
+            <div class="pipeline-card">
+              <span class="pipe-tag">4. Baseline GAN</span>
+              <img id="pipeBaseline" alt="Baseline">
+            </div>
+            <div class="pipeline-card highlight">
+              <span class="pipe-tag">5. RL-GAN (Adaptive)</span>
+              <img id="pipeRl" alt="RL-GAN">
+            </div>
+          </div>
+        </div>
+
+        <!-- Telemetry Cards & Metric Gains -->
+        <div class="telemetry-section">
+          <!-- RL Decision Banner -->
+          <div class="rl-decision-card" id="rlDecisionCard">
+            <div class="decision-icon">🧠</div>
+            <div class="decision-info">
+              <span class="decision-label">PPO RL Strategy Decision</span>
+              <h3 class="decision-name" id="decisionAction">Ready (Waiting for Mask)</h3>
+              <p class="decision-reason" id="decisionDetail">Draw a mask on the left canvas and click Run to observe RL policy selection.</p>
+            </div>
+            <div class="metric-pill" id="gainPill">
+              <span class="gain-label">PSNR Gain</span>
+              <span class="gain-val" id="deltaPsnrVal">+0.0 dB</span>
+            </div>
+          </div>
+
+          <!-- Quantitative Metrics Table -->
+          <div class="metrics-row">
+            <div class="metric-stat">
+              <span class="stat-title">RL-GAN PSNR</span>
+              <span class="stat-value" id="psnrRlVal">-- dB</span>
+              <span class="stat-sub" id="psnrBaseSub">Baseline: -- dB</span>
+            </div>
+            <div class="metric-stat">
+              <span class="stat-title">Structural Similarity</span>
+              <span class="stat-value" id="ssimRlVal">--</span>
+              <span class="stat-sub" id="ssimBaseSub">Baseline: --</span>
+            </div>
+            <div class="metric-stat">
+              <span class="stat-title">Damaged Area</span>
+              <span class="stat-value" id="coverageVal">-- %</span>
+              <span class="stat-sub">Mask Surface</span>
+            </div>
+            <div class="metric-stat">
+              <span class="stat-title">Inference Time</span>
+              <span class="stat-value" id="latencyVal">-- ms</span>
+              <span class="stat-sub">NVIDIA RTX 3050</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

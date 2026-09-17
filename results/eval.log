@@ -1,53 +1,23 @@
-[2026-08-23 22:07:15] [INFO] [evaluate]: Starting evaluation on 10 test samples (device: cpu)...
-[2026-08-23 22:07:51] [INFO] [evaluate]: Starting evaluation on 10 test samples (device: cpu)...
-[2026-08-23 22:07:57] [INFO] [evaluate]: 
+[2026-09-17 19:52:23] [INFO] [evaluate]: Starting evaluation on 25 test samples (device: cuda)...
+[2026-09-17 19:52:23] [INFO] [evaluate]: Loaded RL Agent policy from: checkpoints/rl_agent_bandit/ppo_bandit_final.zip
+[2026-09-17 19:52:25] [INFO] [evaluate]: 
 # RL-GAN Inpainting Evaluation Report
 
 ## 1. Model Comparison & Ablation Table
 
 | Setting / Model | PSNR (dB) [^] | SSIM [^] | L1 Loss [v] |
 |---|:---:|:---:|:---:|
-| **A: GAN Baseline (Fixed Strategy)** | 15.34 | 0.683 | 0.2492 |
-| **B: RL-GAN (Adaptive Controller)** | 15.34 | 0.683 | 0.2492 |
-| **LaMa Reference (Non-RL)** | 13.08 | 0.431 | 0.3117 |
+| **A: GAN Baseline (Fixed Strategy)** | 15.41 | 0.574 | 0.2299 |
+| **B: RL-GAN (Adaptive Controller)** | 15.35 | 0.571 | 0.2343 |
+| **LaMa Reference (Non-RL)** | 13.69 | 0.404 | 0.2812 |
 
 ---
 
 ## 2. Learned Action Distribution
-- **Global Completion**: 0.0% (0/1)
-- **Local Refinement**: 0.0% (0/1)
-- **Boundary Refinement**: 0.0% (0/1)
-- **Texture Refinement**: 0.0% (0/1)
-
----
-
-## 3. Mask Severity Analysis (Hypothesis Testing)
-| Missing Area | Samples | GAN Baseline (PSNR) | RL-GAN (PSNR) | Δ PSNR | GAN (SSIM) | RL-GAN (SSIM) |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 10-20%   |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
-| 20-40%   |       2 |  19.46 dB |  19.46 dB | +0.00 dB | 0.828 | 0.828 |
-| 40-60%   |       2 |  16.04 dB |  16.04 dB | +0.00 dB | 0.690 | 0.690 |
-| 60%+     |       6 |  13.73 dB |  13.73 dB | +0.00 dB | 0.632 | 0.632 |
-
-[2026-08-23 22:08:18] [INFO] [evaluate]: Starting evaluation on 10 test samples (device: cpu)...
-[2026-08-23 22:08:24] [INFO] [evaluate]: 
-# RL-GAN Inpainting Evaluation Report
-
-## 1. Model Comparison & Ablation Table
-
-| Setting / Model | PSNR (dB) [^] | SSIM [^] | L1 Loss [v] |
-|---|:---:|:---:|:---:|
-| **A: GAN Baseline (Fixed Strategy)** | 15.33 | 0.683 | 0.2488 |
-| **B: RL-GAN (Adaptive Controller)** | 15.33 | 0.683 | 0.2488 |
-| **LaMa Reference (Non-RL)** | 13.96 | 0.432 | 0.2873 |
-
----
-
-## 2. Learned Action Distribution
-- **Global Completion**: 0.0% (0/1)
-- **Local Refinement**: 0.0% (0/1)
-- **Boundary Refinement**: 0.0% (0/1)
-- **Texture Refinement**: 0.0% (0/1)
+- **Global Completion**: 100.0% (6/6)
+- **Local Refinement**: 0.0% (0/6)
+- **Boundary Refinement**: 0.0% (0/6)
+- **Texture Refinement**: 0.0% (0/6)
 
 ---
 
@@ -55,7 +25,69 @@
 | Missing Area | Samples | GAN Baseline (PSNR) | RL-GAN (PSNR) | Delta PSNR | GAN (SSIM) | RL-GAN (SSIM) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | 10-20%   |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
-| 20-40%   |       2 |  19.49 dB |  19.49 dB | +0.00 dB | 0.828 | 0.828 |
-| 40-60%   |       2 |  16.02 dB |  16.02 dB | +0.00 dB | 0.695 | 0.695 |
-| 60%+     |       6 |  13.71 dB |  13.71 dB | +0.00 dB | 0.631 | 0.631 |
+| 20-40%   |       1 |  19.24 dB |  18.22 dB | -1.02 dB | 0.834 | 0.822 |
+| 40-60%   |       1 |  16.52 dB |  17.18 dB | +0.67 dB | 0.642 | 0.659 |
+| 60%+     |       4 |  14.17 dB |  14.17 dB | -0.01 dB | 0.492 | 0.486 |
+
+[2026-09-17 20:01:22] [INFO] [evaluate]: Starting evaluation on 25 test samples (device: cuda)...
+[2026-09-17 20:01:22] [INFO] [evaluate]: Loaded RL Agent policy from: checkpoints/rl_agent_bandit/ppo_bandit_final.zip
+[2026-09-17 20:01:36] [INFO] [evaluate]: 
+# RL-GAN Inpainting Evaluation Report
+
+## 1. Model Comparison & Ablation Table
+
+| Setting / Model | PSNR (dB) [^] | SSIM [^] | L1 Loss [v] |
+|---|:---:|:---:|:---:|
+| **A: GAN Baseline (Fixed Strategy)** | 26.82 | 0.864 | 0.0365 |
+| **B: RL-GAN (Adaptive Controller)** | 26.46 | 0.858 | 0.0395 |
+| **LaMa Reference (Non-RL)** | 16.53 | 0.696 | 0.1228 |
+
+---
+
+## 2. Learned Action Distribution
+- **Global Completion**: 0.0% (0/6)
+- **Local Refinement**: 100.0% (6/6)
+- **Boundary Refinement**: 0.0% (0/6)
+- **Texture Refinement**: 0.0% (0/6)
+
+---
+
+## 3. Mask Severity Analysis (Hypothesis Testing)
+| Missing Area | Samples | GAN Baseline (PSNR) | RL-GAN (PSNR) | Delta PSNR | GAN (SSIM) | RL-GAN (SSIM) |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 10-20%   |       1 |  35.26 dB |  35.43 dB | +0.17 dB | 0.973 | 0.972 |
+| 20-40%   |       5 |  25.13 dB |  24.67 dB | -0.46 dB | 0.842 | 0.835 |
+| 40-60%   |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
+| 60%+     |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
+
+[2026-09-17 20:22:19] [INFO] [evaluate]: Starting evaluation on 25 test samples (device: cuda)...
+[2026-09-17 20:22:20] [INFO] [evaluate]: Loaded RL Agent policy from: checkpoints/rl_agent_bandit/ppo_bandit_final.zip
+[2026-09-17 20:22:43] [INFO] [evaluate]: 
+# RL-GAN Inpainting Evaluation Report
+
+## 1. Model Comparison & Ablation Table
+
+| Setting / Model | PSNR (dB) [^] | SSIM [^] | L1 Loss [v] |
+|---|:---:|:---:|:---:|
+| **A: GAN Baseline (Fixed Strategy)** | 25.67 | 0.896 | 0.0520 |
+| **B: RL-GAN (Adaptive Controller)** | 25.48 | 0.894 | 0.0542 |
+| **LaMa Reference (Non-RL)** | 19.73 | 0.848 | 0.0630 |
+
+---
+
+## 2. Learned Action Distribution
+- **Global Completion**: 0.0% (0/6)
+- **Local Refinement**: 100.0% (6/6)
+- **Boundary Refinement**: 0.0% (0/6)
+- **Texture Refinement**: 0.0% (0/6)
+
+---
+
+## 3. Mask Severity Analysis (Hypothesis Testing)
+| Missing Area | Samples | GAN Baseline (PSNR) | RL-GAN (PSNR) | Delta PSNR | GAN (SSIM) | RL-GAN (SSIM) |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 10-20%   |       5 |  27.12 dB |  26.94 dB | -0.17 dB | 0.907 | 0.907 |
+| 20-40%   |       1 |  18.42 dB |  18.13 dB | -0.29 dB | 0.836 | 0.833 |
+| 40-60%   |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
+| 60%+     |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
 

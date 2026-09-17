@@ -4,24 +4,24 @@
 
 | Setting / Model | PSNR (dB) [^] | SSIM [^] | L1 Loss [v] |
 |---|:---:|:---:|:---:|
-| **A: GAN Baseline (Fixed Strategy)** | 15.33 | 0.683 | 0.2488 |
-| **B: RL-GAN (Adaptive Controller)** | 15.33 | 0.683 | 0.2488 |
-| **LaMa Reference (Non-RL)** | 13.96 | 0.432 | 0.2873 |
+| **A: GAN Baseline (Fixed Strategy)** | 25.67 | 0.896 | 0.0520 |
+| **B: RL-GAN (Adaptive Controller)** | 25.48 | 0.894 | 0.0542 |
+| **LaMa Reference (Non-RL)** | 19.73 | 0.848 | 0.0630 |
 
 ---
 
 ## 2. Learned Action Distribution
-- **Global Completion**: 0.0% (0/1)
-- **Local Refinement**: 0.0% (0/1)
-- **Boundary Refinement**: 0.0% (0/1)
-- **Texture Refinement**: 0.0% (0/1)
+- **Global Completion**: 0.0% (0/6)
+- **Local Refinement**: 100.0% (6/6)
+- **Boundary Refinement**: 0.0% (0/6)
+- **Texture Refinement**: 0.0% (0/6)
 
 ---
 
 ## 3. Mask Severity Analysis (Hypothesis Testing)
 | Missing Area | Samples | GAN Baseline (PSNR) | RL-GAN (PSNR) | Delta PSNR | GAN (SSIM) | RL-GAN (SSIM) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 10-20%   |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
-| 20-40%   |       2 |  19.49 dB |  19.49 dB | +0.00 dB | 0.828 | 0.828 |
-| 40-60%   |       2 |  16.02 dB |  16.02 dB | +0.00 dB | 0.695 | 0.695 |
-| 60%+     |       6 |  13.71 dB |  13.71 dB | +0.00 dB | 0.631 | 0.631 |
+| 10-20%   |       5 |  27.12 dB |  26.94 dB | -0.17 dB | 0.907 | 0.907 |
+| 20-40%   |       1 |  18.42 dB |  18.13 dB | -0.29 dB | 0.836 | 0.833 |
+| 40-60%   |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |
+| 60%+     |       0 |   0.00 dB |   0.00 dB | +0.00 dB | 0.000 | 0.000 |

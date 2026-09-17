@@ -1,9 +1,9 @@
 # Pre-training GAN Baseline (Experiment A) Configuration
 data:
-  image_dir: null            # Path to dataset or null for synthetic procedural data
+  image_dir: "data/raw/sample_images"
   mask_dir: null
   image_size: 128
-  batch_size: 8
+  batch_size: 2
   num_workers: 0
   synthetic_size: 100
 
@@ -20,12 +20,12 @@ loss:
   adv_weight: 0.001
 
 training:
-  epochs: 5
+  epochs: 100
   lr_g: 0.0002
   lr_d: 0.0002
   beta1: 0.5
   beta2: 0.999
-  device: "cpu"              # "cuda" if GPU is available
+  device: "cuda"
   seed: 42
   save_dir: "checkpoints/gan_baseline"
   log_dir: "logs/gan_baseline"
