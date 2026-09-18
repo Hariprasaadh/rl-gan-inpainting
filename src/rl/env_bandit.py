@@ -8,7 +8,7 @@ import torch.nn as nn
 from src.rl.actions import ACTION_NAMES, get_action_cost
 from src.rl.state import StateBuilder
 from src.rl.reward import compute_image_metrics, compute_reward
-from src.models.generator import InpaintingGenerator
+from src.models.rl_inpainting_model import RLInpaintingModel
 from src.models.discriminator import SNPatchGANDiscriminator
 from src.data.dataset import InpaintingDataset
 
@@ -26,7 +26,7 @@ class InpaintingBanditEnv(gym.Env):
     def __init__(
         self,
         dataset: InpaintingDataset,
-        generator: InpaintingGenerator,
+        generator: RLInpaintingModel,
         discriminator: SNPatchGANDiscriminator,
         device: str = "cpu",
         reward_weights: Tuple[float, float, float, float, float] = (1.0, 1.0, 0.5, 0.5, 0.3),
@@ -47,8 +47,9 @@ class InpaintingBanditEnv(gym.Env):
         for p in self.discriminator.parameters():
             p.requires_grad = False
 
+        # encoder_head is the DeepFillEncoder; .latent_dim is preserved
         self.state_builder = StateBuilder(
-            latent_dim=generator.encoder.latent_dim,
+            latent_dim=generator.encoder_head.latent_dim,
             include_mask_stats=include_mask_stats,
             include_quality_proxy=True,
         )

@@ -24,9 +24,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Initializing RL-GAN Web Engine on device: {device} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})", flush=True)
 
 generator = InpaintingGenerator(base_channels=32, strategy_dim=64, latent_dim=256).to(device)
+pretrained_weights = None
 if os.path.exists("checkpoints/gan_baseline/best_model.pt"):
     ckpt = torch.load("checkpoints/gan_baseline/best_model.pt", map_location=device, weights_only=False)
-    generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
+    pretrained_weights = ckpt["generator_state_dict"]
+    generator.load_state_dict(pretrained_weights, strict=False)
 generator.eval()
 print("Generator checkpoint loaded.", flush=True)
 
@@ -38,6 +40,8 @@ if os.path.exists("checkpoints/rl_agent_bandit/ppo_bandit_final.zip"):
 state_builder = StateBuilder(latent_dim=generator.encoder.latent_dim)
 l1_fn = MaskedL1Loss(hole_weight=30.0, valid_weight=1.0)
 
+
+import urllib.parse
 
 def pil_to_base64(img: Image.Image, format="PNG") -> str:
     buf = io.BytesIO()
@@ -57,14 +61,11 @@ def base64_to_mask(b64_str: str, size=(256, 256)) -> np.ndarray:
         b64_str = b64_str.split(",", 1)[1]
     data = base64.b64decode(b64_str)
     img = Image.open(io.BytesIO(data))
-    # Extract alpha or grayscale
-    if "A" in img.getbands():
-        mask_np = (np.array(img.split()[-1]) > 10).astype(np.uint8)
-    else:
-        mask_np = (np.array(img.convert("L")) > 10).astype(np.uint8)
+    gray = np.array(img.convert("L"))
+    mask_np = (gray > 127).astype(np.uint8)
     if mask_np.shape != size:
         mask_pil = Image.fromarray(mask_np * 255).resize(size, Image.NEAREST)
-        mask_np = (np.array(mask_pil) > 10).astype(np.uint8)
+        mask_np = (np.array(mask_pil) > 127).astype(np.uint8)
     return mask_np
 
 
@@ -86,13 +87,14 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                     if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".avif")):
                         presets.append({
                             "name": f,
-                            "url": f"/api/image/{f}"
+                            "url": f"/api/image/{urllib.parse.quote(f)}"
                         })
             self.wfile.write(json.dumps(presets).encode("utf-8"))
             return
             
         elif parsed.path.startswith("/api/image/"):
-            filename = parsed.path.replace("/api/image/", "")
+            raw_filename = parsed.path.replace("/api/image/", "")
+            filename = urllib.parse.unquote(raw_filename)
             filepath = os.path.join("data/raw/sample_images", filename)
             if os.path.exists(filepath):
                 try:
@@ -140,6 +142,10 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                 if mask_np.sum() == 0:
                     self.send_error(400, "Mask cannot be empty")
                     return
+
+                # Always start each inference from clean pretrained baseline weights
+                if pretrained_weights is not None:
+                    generator.load_state_dict(pretrained_weights, strict=False)
 
                 # Convert to Torch tensors in [-1, 1] and {0, 1}
                 img_np = np.array(pil_img).astype(np.float32) / 127.5 - 1.0
@@ -211,8 +217,12 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
 
                 # 5. Convert outputs to PIL & Base64
                 img_gt_pil = Image.fromarray(denormalize_image(img_tensor[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
-                img_masked_pil = Image.fromarray(denormalize_image(masked_tensor[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
-                img_coarse_pil = Image.fromarray(denormalize_image(coarse_comp[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
+                
+                # Visual masked representation: damaged area cut out as clean high-contrast black hole
+                visual_masked = img_tensor.clone()
+                visual_masked[mask_tensor.expand_as(visual_masked) > 0.5] = -1.0
+                img_masked_pil = Image.fromarray(denormalize_image(visual_masked[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
+                
                 img_baseline_pil = Image.fromarray(denormalize_image(gan_comp[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
                 img_rl_pil = Image.fromarray(denormalize_image(rl_comp[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
 

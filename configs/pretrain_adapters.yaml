@@ -1,0 +1,26 @@
+# Adapter Pretraining Configuration (Stage 2 of rebuild pipeline)
+# Pretrain all 4 strategy adapters on COCO val2017 before RL training.
+
+data:
+  image_dir: "data/raw/val2017"      # COCO val2017 (5k images)
+  image_size: 256
+  batch_size: 4
+  num_workers: 2
+
+model:
+  cnum: 48                            # Must match nipponjo pretrained weights
+  strategy_dim: 64
+  latent_dim: 256
+  backbone_checkpoint: "checkpoints/pretrained/deepfillv2_places2.pth"
+
+training:
+  epochs: 5                           # ~2 hrs on RTX 4050 for all 4 adapters
+  lr: 0.0001
+  device: "cuda"
+  save_dir: "checkpoints/adapters"
+
+# Loss function reference (for documentation, controlled in pretrain_adapters.py):
+#   Action 0  GlobalAdapter  : L1(full) + 0.05 * Perceptual
+#   Action 1  LocalAdapter   : 6.0 * L1(hole) + 0.5 * SSIM(hole)
+#   Action 2  BoundaryAdapter: L1(full) + 2.0 * BoundaryGradientLoss
+#   Action 3  TextureAdapter : L1(full) + 0.1 * FFTFrequencyLoss + 0.05 * Perceptual

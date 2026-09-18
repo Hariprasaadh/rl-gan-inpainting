@@ -41,6 +41,16 @@ def normalize_psnr_delta(d_psnr: float) -> float:
     return float(np.clip(d_psnr / 10.0, -2.0, 2.0))
 
 
+def normalize_metric_delta(delta: float, scale: float, clip: float = 2.0) -> float:
+    """Generic per-metric normalizer: delta / scale, clamped to [-clip, clip].
+
+    Typical scales:
+        PSNR : 10.0  (useful range ~10 dB)
+        SSIM : 0.1   (useful range ~0.1)
+        LPIPS: 0.1   (useful range ~0.1)
+    """
+    return float(np.clip(delta / scale, -clip, clip))
+
 def compute_image_metrics(
     image_tensor: torch.Tensor,
     gt_tensor: torch.Tensor,
@@ -108,9 +118,14 @@ def compute_reward(
     alpha, beta, gamma, delta, lam = weights
 
     d_psnr_raw = new_metrics["psnr"] - prev_metrics["psnr"]
-    d_psnr = normalize_psnr_delta(d_psnr_raw)
-    d_ssim = float(new_metrics["ssim"] - prev_metrics["ssim"])
-    d_lpips = float(new_metrics["lpips"] - prev_metrics["lpips"])  # lower is better
+    d_ssim_raw = new_metrics["ssim"] - prev_metrics["ssim"]
+    d_lpips_raw= new_metrics["lpips"] - prev_metrics["lpips"]  # lower is better
+
+    # Normalize each metric to a comparable scale before weighting
+    d_psnr  = normalize_metric_delta(d_psnr_raw,  scale=10.0)  # PSNR ~10 dB range
+    d_ssim  = normalize_metric_delta(d_ssim_raw,  scale=0.1)   # SSIM ~0.1 range
+    d_lpips = normalize_metric_delta(d_lpips_raw, scale=0.1)   # LPIPS ~0.1 range
+
     cost = get_action_cost(action)
 
     reward = (
@@ -129,7 +144,9 @@ def compute_reward(
         "d_psnr": d_psnr,
         "d_psnr_raw": d_psnr_raw,
         "d_ssim": d_ssim,
+        "d_ssim_raw": d_ssim_raw,
         "d_lpips": d_lpips,
+        "d_lpips_raw": d_lpips_raw,
         "disc_delta": disc_score_delta,
         "action_cost": cost,
         "new_psnr": new_metrics["psnr"],

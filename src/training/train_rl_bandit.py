@@ -9,7 +9,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from src.utils.seed import seed_everything
 from src.utils.logger import setup_logger
 from src.data.dataset import InpaintingDataset
-from src.models.generator import InpaintingGenerator
+from src.models.rl_inpainting_model import RLInpaintingModel
 from src.models.discriminator import SNPatchGANDiscriminator
 from src.rl.actions import ACTION_NAMES
 from src.rl.env_bandit import InpaintingBanditEnv
@@ -93,25 +93,34 @@ def train_rl_bandit(config_path: str, override_timesteps: Optional[int] = None) 
     )
 
     # Models
-    generator = InpaintingGenerator(
-        base_channels=cfg["model"].get("base_channels", 32),
+    generator = RLInpaintingModel(
+        cnum        =cfg["model"].get("cnum", 48),
         strategy_dim=cfg["model"].get("strategy_dim", 64),
-        latent_dim=cfg["model"].get("latent_dim", 256),
+        latent_dim  =cfg["model"].get("latent_dim", 256),
     ).to(device)
 
-    discriminator = SNPatchGANDiscriminator(
-        base_channels=cfg["model"].get("base_channels", 32) * 2,
-    ).to(device)
-
-    # Load GAN weights if checkpoint available
-    ckpt_path = cfg["model"].get("checkpoint_gan")
-    if ckpt_path and os.path.exists(ckpt_path):
-        logger.info(f"Loading pretrained GAN baseline from: {ckpt_path}")
-        ckpt = load_checkpoint(ckpt_path, device=device)
-        generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
-        discriminator.load_state_dict(ckpt["discriminator_state_dict"], strict=False)
+    # Load pretrained DeepFill-v2 backbone
+    backbone_ckpt = cfg["model"].get("backbone_checkpoint")
+    if backbone_ckpt and os.path.exists(backbone_ckpt):
+        logger.info(f"Loading DeepFill-v2 backbone from: {backbone_ckpt}")
+        generator.load_pretrained_backbone(backbone_ckpt)
     else:
-        logger.warning(f"GAN checkpoint not found at '{ckpt_path}'. Training with initialized weights.")
+        logger.warning(f"Backbone checkpoint not found at '{backbone_ckpt}'. Backbone will be random (CHECKPOINT 1 fail).")
+
+    # Load pretrained adapter weights
+    adapters_ckpt = cfg["model"].get("adapters_checkpoint")
+    if adapters_ckpt and os.path.exists(adapters_ckpt):
+        logger.info(f"Loading adapter weights from: {adapters_ckpt}")
+        generator.load_adapters(adapters_ckpt)
+    else:
+        logger.warning(f"Adapter checkpoint not found at '{adapters_ckpt}'. Adapters will be random — run pretrain-adapters first.")
+
+    # Discriminator is still used for the disc_delta reward component.
+    # We use the default SN-PatchGAN with fresh random weights (no pretrained GAN).
+    # Its role in the reward is downweighted by the reward_weights config.
+    discriminator = SNPatchGANDiscriminator(
+        base_channels=cfg["model"].get("disc_base_channels", 64),
+    ).to(device)
 
     # Create Gym Contextual Bandit Environment
     reward_weights = tuple(cfg["rl"].get("reward_weights", [1.0, 1.0, 0.5, 0.5, 0.3]))

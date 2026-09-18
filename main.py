@@ -33,6 +33,81 @@ def cmd_generate_eval_masks(args: argparse.Namespace) -> None:
     print(f"Successfully generated {total} fixed evaluation masks across 4 severity buckets.")
 
 
+def cmd_download_deepfill(args: argparse.Namespace) -> None:
+    """Print instructions for downloading the DeepFill-v2 checkpoint."""
+    print("""
+================================================================================
+  DeepFill-v2 Checkpoint Download Instructions
+================================================================================
+
+The nipponjo/deepfillv2-pytorch pretrained weights are hosted on Google Drive.
+
+Step 1: Visit the nipponjo repository README:
+  https://github.com/nipponjo/deepfillv2-pytorch
+
+Step 2: Download 'states_pt_places2.pth' from the Google Drive link in README.
+
+Step 3: Place the file at:
+  checkpoints/pretrained/deepfillv2_places2.pth
+
+Verify the checkpoint:
+  python -c \\
+    "import torch; ckpt=torch.load('checkpoints/pretrained/deepfillv2_places2.pth', weights_only=False); \\
+     sd = ckpt.get('G', ckpt); print(list(sd.keys())[:5])"
+
+Expected output: keys like 'coarse_net.conv1.conv_feat.weight'
+================================================================================
+""")
+
+
+def cmd_pretrain_adapters(args: argparse.Namespace) -> None:
+    """Pretrain the 4 strategy adapters (Stage 2)."""
+    from src.training.pretrain_adapters import pretrain_adapters
+    pretrain_adapters(config_path=args.config)
+
+
+def cmd_verify_strategies(args: argparse.Namespace) -> None:
+    """Run Checkpoint 2+3: verify state embeddings and adapter specialisation."""
+    import subprocess, sys
+    cmd = [
+        sys.executable, "scripts/verify_strategies.py",
+        "--backbone",  args.backbone,
+        "--adapters",  args.adapters,
+        "--data-dir",  args.data_dir,
+        "--n-images",  str(args.n_images),
+        "--output",    args.output,
+        "--device",    args.device,
+    ]
+    if args.state_only:
+        cmd.append("--state-only")
+    subprocess.run(cmd, check=True)
+
+
+def cmd_create_eval_set(args: argparse.Namespace) -> None:
+    """Create the fixed 100-image evaluation set (Stage 4)."""
+    from scripts.create_eval_set import build_eval_set
+    build_eval_set(
+        data_dir   =args.data_dir,
+        output_dir =args.output,
+        per_bucket =args.per_bucket,
+        image_size =args.image_size,
+        seed       =args.seed,
+    )
+
+
+def cmd_eval_baseline(args: argparse.Namespace) -> None:
+    """Evaluate Experiment A: frozen DeepFill-v2 baseline (no RL)."""
+    from scripts.evaluate_baseline import evaluate_baseline
+    evaluate_baseline(
+        backbone_path=args.backbone,
+        eval_dir     =args.eval_dir,
+        output_dir   =args.output_dir,
+        image_size   =args.image_size,
+        device_str   =args.device,
+        compute_lpips=not args.no_lpips,
+    )
+
+
 def cmd_train_gan(args: argparse.Namespace) -> None:
     """Train GAN baseline (Experiment A)."""
     train_gan_baseline(config_path=args.config, override_epochs=args.epochs)
@@ -162,6 +237,41 @@ def main() -> None:
     p_masks.add_argument("--image-size", type=int, default=256)
     p_masks.add_argument("--seed", type=int, default=42)
 
+    # Command: download-deepfill
+    subparsers.add_parser("download-deepfill", help="Print DeepFill-v2 checkpoint download instructions")
+
+    # Command: pretrain-adapters
+    p_adpt = subparsers.add_parser("pretrain-adapters", help="Pretrain the 4 strategy adapters (Stage 2)")
+    p_adpt.add_argument("--config", type=str, default="configs/pretrain_adapters.yaml")
+
+    # Command: verify-strategies
+    p_vs = subparsers.add_parser("verify-strategies", help="Checkpoint 2+3: verify embeddings and adapter specialisation")
+    p_vs.add_argument("--backbone",  type=str, default="checkpoints/pretrained/deepfillv2_places2.pth")
+    p_vs.add_argument("--adapters",  type=str, default="checkpoints/adapters/adapters_final.pt")
+    p_vs.add_argument("--data-dir",  type=str, default="data/raw/val2017")
+    p_vs.add_argument("--n-images",  type=int, default=8)
+    p_vs.add_argument("--image-size",type=int, default=256)
+    p_vs.add_argument("--output",    type=str, default="results/strategy_verify")
+    p_vs.add_argument("--device",    type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    p_vs.add_argument("--state-only",action="store_true")
+
+    # Command: create-eval-set
+    p_ces = subparsers.add_parser("create-eval-set", help="Create 100-image fixed evaluation set")
+    p_ces.add_argument("--data-dir",   type=str, default="data/raw/val2017")
+    p_ces.add_argument("--output",     type=str, default="data/masks/fixed_eval_masks")
+    p_ces.add_argument("--per-bucket", type=int, default=25)
+    p_ces.add_argument("--image-size", type=int, default=256)
+    p_ces.add_argument("--seed",       type=int, default=42)
+
+    # Command: eval-baseline
+    p_eb = subparsers.add_parser("eval-baseline", help="Experiment A: evaluate frozen DeepFill-v2 baseline")
+    p_eb.add_argument("--backbone",    type=str, default="checkpoints/pretrained/deepfillv2_places2.pth")
+    p_eb.add_argument("--eval-dir",    type=str, default="data/masks/fixed_eval_masks")
+    p_eb.add_argument("--output-dir",  type=str, default="results/baseline_A")
+    p_eb.add_argument("--image-size",  type=int, default=256)
+    p_eb.add_argument("--device",      type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    p_eb.add_argument("--no-lpips",    action="store_true")
+
     # Command: train-gan
     p_gan = subparsers.add_parser("train-gan", help="Pretrain GAN Baseline (Experiment A)")
     p_gan.add_argument("--config", type=str, default="configs/pretrain_gan.yaml")
@@ -208,6 +318,16 @@ def main() -> None:
 
     if args.command == "generate-eval-masks":
         cmd_generate_eval_masks(args)
+    elif args.command == "download-deepfill":
+        cmd_download_deepfill(args)
+    elif args.command == "pretrain-adapters":
+        cmd_pretrain_adapters(args)
+    elif args.command == "verify-strategies":
+        cmd_verify_strategies(args)
+    elif args.command == "create-eval-set":
+        cmd_create_eval_set(args)
+    elif args.command == "eval-baseline":
+        cmd_eval_baseline(args)
     elif args.command == "train-gan":
         cmd_train_gan(args)
     elif args.command == "train-rl":
