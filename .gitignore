@@ -31,6 +31,18 @@ logs/
 
 # Checkpoints (Large binary model weights)
 checkpoints/
+*.pt
+*.pth
+*.zip
+*.tar.gz
+
+# Datasets & raw archives (do not commit raw datasets)
+data/raw/val2017/
+data/raw/train2017/
+data/raw/*.zip
+data/raw/*.tar.gz
+data/raw/places2/
+data/raw/celeba_hq/
 
 # Testing & Coverage
 .pytest_cache/
@@ -47,3 +59,5 @@ htmlcov/
 
 # Temporary outputs
 *.tmp
+results/test_web_verify.png
+

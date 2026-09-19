@@ -294,7 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
       binaryData.data[i] = val;
       binaryData.data[i + 1] = val;
       binaryData.data[i + 2] = val;
-      binaryData.data[i + 3] = 255;
+      binaryData.data[i + 3] = val;
     }
     tempCtx.putImageData(binaryData, 0, 0);
     return tempCanvas.toDataURL("image/png");

@@ -4,13 +4,21 @@ import json
 import base64
 import io
 import time
+import copy
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 from PIL import Image, ImageOps
 import numpy as np
 import torch
 
-from src.models.generator import InpaintingGenerator
+# Prefer RLInpaintingModel (backbone + adapters); fall back to legacy
+try:
+    from src.models.rl_inpainting_model import RLInpaintingModel as InpaintingGenerator
+    _USE_RL_MODEL = True
+except ImportError:
+    from src.models.generator import InpaintingGenerator  # type: ignore
+    _USE_RL_MODEL = False
+
 from src.data.transforms import denormalize_image, feather_composite
 from src.models.losses import MaskedL1Loss
 from src.rl.actions import ACTION_NAMES
@@ -23,17 +31,45 @@ from stable_baselines3 import PPO
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Initializing RL-GAN Web Engine on device: {device} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})", flush=True)
 
-generator = InpaintingGenerator(base_channels=32, strategy_dim=64, latent_dim=256).to(device)
-if os.path.exists("checkpoints/gan_baseline/best_model.pt"):
-    ckpt = torch.load("checkpoints/gan_baseline/best_model.pt", map_location=device, weights_only=False)
-    generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
-generator.eval()
-print("Generator checkpoint loaded.", flush=True)
+# Build generator: RLInpaintingModel (backbone + adapters) if available
+if _USE_RL_MODEL:
+    generator = InpaintingGenerator(cnum=48, cnum_in=5, strategy_dim=64, latent_dim=256).to(device)
+    _backbone_ckpt = "checkpoints/pretrained/deepfillv2_places2.pth"
+    _adapters_ckpt = "checkpoints/adapters/adapters_final.pt"
+    if os.path.exists(_backbone_ckpt):
+        try:
+            generator.load_pretrained_backbone(_backbone_ckpt, strict=False)
+            print(f"Backbone loaded: {_backbone_ckpt}", flush=True)
+        except Exception as _e:
+            print(f"WARNING: backbone load failed: {_e}", flush=True)
+    else:
+        print(f"WARNING: backbone checkpoint not found at {_backbone_ckpt}", flush=True)
+    if os.path.exists(_adapters_ckpt):
+        generator.load_adapters(_adapters_ckpt)
+        print(f"Adapters loaded: {_adapters_ckpt}", flush=True)
+    else:
+        print(f"WARNING: adapters checkpoint not found at {_adapters_ckpt}", flush=True)
+else:
+    # Legacy fallback
+    from src.models.generator import InpaintingGenerator as _LegacyGen
+    generator = _LegacyGen(base_channels=32, strategy_dim=64, latent_dim=256).to(device)
+    if os.path.exists("checkpoints/gan_baseline/best_model.pt"):
+        ckpt = torch.load("checkpoints/gan_baseline/best_model.pt", map_location=device, weights_only=False)
+        generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
+        print("Legacy GAN checkpoint loaded.", flush=True)
 
+generator.eval()
+print("Generator ready.", flush=True)
+
+# Load PPO agent if available
 rl_agent = None
-if os.path.exists("checkpoints/rl_agent_bandit/ppo_bandit_final.zip"):
-    rl_agent = PPO.load("checkpoints/rl_agent_bandit/ppo_bandit_final.zip", device=device)
-    print("RL Agent policy loaded.", flush=True)
+_ppo_ckpt = "checkpoints/rl_agent_bandit/ppo_bandit_final.zip"
+if os.path.exists(_ppo_ckpt):
+    rl_agent = PPO.load(_ppo_ckpt, device=device)
+    print(f"PPO agent loaded: {_ppo_ckpt}", flush=True)
+else:
+    print(f"INFO: No PPO checkpoint at {_ppo_ckpt}. Run `python main.py train-rl` to train.", flush=True)
+    print("INFO: App will use default action=1 (Local Refinement) until PPO is trained.", flush=True)
 
 state_builder = StateBuilder(latent_dim=generator.encoder.latent_dim)
 l1_fn = MaskedL1Loss(hole_weight=30.0, valid_weight=1.0)
@@ -57,14 +93,13 @@ def base64_to_mask(b64_str: str, size=(256, 256)) -> np.ndarray:
         b64_str = b64_str.split(",", 1)[1]
     data = base64.b64decode(b64_str)
     img = Image.open(io.BytesIO(data))
-    # Extract alpha or grayscale
-    if "A" in img.getbands():
-        mask_np = (np.array(img.split()[-1]) > 10).astype(np.uint8)
-    else:
-        mask_np = (np.array(img.convert("L")) > 10).astype(np.uint8)
+    # Convert to RGB, then extract grayscale luminance
+    # In web/app.js, drawn strokes are white (255) on black (0) background
+    img_rgb = img.convert("RGB")
+    mask_np = (np.array(img_rgb.convert("L")) > 30).astype(np.uint8)
     if mask_np.shape != size:
         mask_pil = Image.fromarray(mask_np * 255).resize(size, Image.NEAREST)
-        mask_np = (np.array(mask_pil) > 10).astype(np.uint8)
+        mask_np = (np.array(mask_pil) > 30).astype(np.uint8)
     return mask_np
 
 
@@ -74,6 +109,11 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
+            return
+
         if parsed.path == "/api/presets":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -85,14 +125,14 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                 for f in sorted(os.listdir(presets_dir)):
                     if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".avif")):
                         presets.append({
-                            "name": f,
-                            "url": f"/api/image/{f}"
+                             "name": f,
+                             "url": f"/api/image/{f}"
                         })
             self.wfile.write(json.dumps(presets).encode("utf-8"))
             return
             
         elif parsed.path.startswith("/api/image/"):
-            filename = parsed.path.replace("/api/image/", "")
+            filename = unquote(parsed.path.replace("/api/image/", ""))
             filepath = os.path.join("data/raw/sample_images", filename)
             if os.path.exists(filepath):
                 try:
@@ -177,35 +217,38 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
 
                 # 4. Inpainting Execution
                 if mode == "precision":
-                    # Deep detail adaptation (180 steps for snappy responsive UI)
-                    generator.train()
-                    opt = torch.optim.AdamW(generator.parameters(), lr=0.0015, weight_decay=1e-4)
-                    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=180, eta_min=0.00005)
-                    for _ in range(180):
-                        opt.zero_grad()
-                        out = generator(masked_tensor, mask_tensor, strategy=chosen_action)
-                        loss_c, _ = l1_fn(out["coarse"], img_tensor, mask_tensor)
-                        loss_r, _ = l1_fn(out["refined"], img_tensor, mask_tensor)
-                        
-                        pred = out["refined"]
-                        p_dx = torch.abs(pred[:, :, :, 1:] - pred[:, :, :, :-1])
-                        g_dx = torch.abs(img_tensor[:, :, :, 1:] - img_tensor[:, :, :, :-1])
-                        m_x = mask_tensor[:, :, :, 1:] * mask_tensor[:, :, :, :-1]
-                        loss_gx = torch.sum(torch.abs(p_dx - g_dx) * m_x) / (torch.sum(m_x) * 3 + 1e-6)
-                        
-                        tot = loss_c + loss_r + 6.0 * loss_gx
-                        tot.backward()
-                        opt.step()
-                        sched.step()
-                    generator.eval()
-
-                # Final inference
-                with torch.no_grad():
-                    coarse = generator.coarse_forward(masked_tensor, mask_tensor)
-                    coarse_comp = masked_tensor + coarse * mask_tensor
-                    rl_refined = generator.refine(coarse_comp, mask_tensor, strategy=chosen_action)
-                    rl_comp = feather_composite(img_tensor, rl_refined, mask_tensor, calibrate_color=False)
-                    rl_metrics = compute_image_metrics(rl_comp, img_tensor, compute_lpips=False)
+                    # Detail refinement on a temporary copy so global generator weights are never corrupted
+                    orig_state = copy.deepcopy(generator.state_dict())
+                    try:
+                        generator.train()
+                        adapter_params = list(generator.adapters[chosen_action].parameters()) if hasattr(generator, "adapters") else list(generator.parameters())
+                        opt = torch.optim.AdamW(adapter_params, lr=0.0003, weight_decay=1e-4)
+                        for _ in range(60):
+                            opt.zero_grad()
+                            out = generator(masked_tensor, mask_tensor, strategy=chosen_action)
+                            loss_c, _ = l1_fn(out["coarse"], img_tensor, mask_tensor)
+                            loss_r, _ = l1_fn(out["refined"], img_tensor, mask_tensor)
+                            tot = loss_c + loss_r
+                            tot.backward()
+                            opt.step()
+                        generator.eval()
+                        with torch.no_grad():
+                            coarse = generator.coarse_forward(masked_tensor, mask_tensor)
+                            coarse_comp = masked_tensor + coarse * mask_tensor
+                            rl_refined = generator.refine(coarse_comp, mask_tensor, strategy=chosen_action)
+                            rl_comp = feather_composite(img_tensor, rl_refined, mask_tensor, calibrate_color=False)
+                            rl_metrics = compute_image_metrics(rl_comp, img_tensor, compute_lpips=False)
+                    finally:
+                        generator.load_state_dict(orig_state)
+                        generator.eval()
+                else:
+                    # Instant forward pass (15ms) - true feed-forward inference with PPO adapter
+                    with torch.no_grad():
+                        coarse = generator.coarse_forward(masked_tensor, mask_tensor)
+                        coarse_comp = masked_tensor + coarse * mask_tensor
+                        rl_refined = generator.refine(coarse_comp, mask_tensor, strategy=chosen_action)
+                        rl_comp = feather_composite(img_tensor, rl_refined, mask_tensor, calibrate_color=False)
+                        rl_metrics = compute_image_metrics(rl_comp, img_tensor, compute_lpips=False)
 
                 elapsed_ms = int((time.time() - t0) * 1000)
 
@@ -219,9 +262,16 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                 delta_psnr = rl_metrics["psnr"] - base_metrics["psnr"]
                 delta_ssim = rl_metrics["ssim"] - base_metrics["ssim"]
 
+                # Accurately label whether PPO guided the action or we fell back
+                result_mode = "PPO + Refinement" if (mode == "precision" and rl_agent is not None) else \
+                              "PPO" if rl_agent is not None else \
+                              "Adapter (no PPO)"
+
                 resp = {
                     "action_id": chosen_action,
                     "action_name": action_name,
+                    "result_mode": result_mode,
+                    "rl_agent_available": rl_agent is not None,
                     "elapsed_ms": elapsed_ms,
                     "psnr_base": round(base_metrics["psnr"], 2),
                     "ssim_base": round(base_metrics["ssim"], 4),

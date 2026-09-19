@@ -82,14 +82,14 @@
         <div class="action-footer">
           <div class="mode-toggle-row">
             <label class="radio-label">
-              <input type="radio" name="inferMode" value="precision" checked>
-              <span class="radio-custom"></span>
-              <span>Ultra-Precision (Perceptual Detail)</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="inferMode" value="fast">
+              <input type="radio" name="inferMode" value="fast" checked>
               <span class="radio-custom"></span>
               <span>Instant Forward Pass (15ms)</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="inferMode" value="precision">
+              <span class="radio-custom"></span>
+              <span>Ultra-Precision (Perceptual Detail)</span>
             </label>
           </div>
           <button class="btn btn-primary run-btn" id="btnInpaint">

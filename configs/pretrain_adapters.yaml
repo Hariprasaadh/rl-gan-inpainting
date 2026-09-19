@@ -1,0 +1,22 @@
+# Adapter Pretraining Configuration
+data:
+  image_dir: "data/raw/val2017"
+  image_size: 256
+  batch_size: 4
+  num_workers: 2
+  synthetic_size: 200
+
+model:
+  cnum: 48
+  cnum_in: 5
+  strategy_dim: 64
+  latent_dim: 256
+  backbone_checkpoint: "checkpoints/pretrained/deepfillv2_places2.pth"
+
+training:
+  epochs: 5
+  lr: 0.0001
+  device: "cuda"
+  save_dir: "checkpoints/adapters"
+  log_dir: "logs/adapters"
+  save_every: 1

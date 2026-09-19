@@ -1,6 +1,8 @@
 # Pre-training GAN Baseline (Experiment A) Configuration
+# NOTE: For new DeepFillv2 backbone baseline, use data/raw/val2017 and frozen backbone (Experiment A via scripts/evaluate_baseline.py).
+# This config is preserved for legacy train-gan from scratch; for pretrained backbone eval, prefer backbone_baseline via evaluate_baseline.
 data:
-  image_dir: "data/raw/sample_images"
+  image_dir: "data/raw/val2017"
   mask_dir: null
   image_size: 128
   batch_size: 2

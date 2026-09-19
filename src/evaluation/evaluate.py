@@ -8,7 +8,10 @@ import torch
 from src.utils.seed import seed_everything
 from src.utils.logger import setup_logger
 from src.data.dataset import InpaintingDataset
-from src.models.generator import InpaintingGenerator
+try:
+    from src.models.rl_inpainting_model import RLInpaintingModel as InpaintingGenerator
+except ImportError:
+    from src.models.generator import InpaintingGenerator  # type: ignore
 from src.rl.actions import ACTION_NAMES
 from src.rl.state import StateBuilder
 from src.evaluation.metrics import InpaintingMetricEvaluator

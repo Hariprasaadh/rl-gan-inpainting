@@ -1,156 +1,202 @@
-# Adaptive Image Inpainting using Reinforcement Learning Guided GAN (RL-GAN)
+# RL-GAN: Adaptive Image Inpainting using Reinforcement Learning Guided GAN
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch 2.6](https://img.shields.io/badge/PyTorch-2.6%2BCUDA124-EE4C2C.svg)](https://pytorch.org/)
+[![Stable-Baselines3](https://img.shields.io/badge/RL-Stable--Baselines3-brightgreen.svg)](https://stable-baselines3.readthedocs.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Core Research Question:** *Can an RL controller dynamically choose the appropriate restoration strategy for a GAN generator, and does that adaptive control provide greater benefit as the missing region gets harder to reconstruct?*
+> **Core Research Question:** *Can a Reinforcement Learning (PPO) controller dynamically choose optimal restoration strategies (Global, Local, Boundary, Texture) for a generative inpainter based on missing hole geometry and contextual difficulty?*
 
 ---
 
 ## 🏗 System Architecture
 
+```text
+                                Damaged Image + Hole Mask
+                                            │
+               ┌────────────────────────────┴────────────────────────────┐
+               │                                                         │
+   [DeepFillV2 Frozen Backbone]                               [State Observation Vector]
+               │                                                         │
+    Coarse & Refined Features                                 - Bottleneck Latent Features (256d)
+               │                                              - Mask Statistics (Area, Aspect Ratio)
+               │                                              - Coarse Reconstruction Error Metrics
+               │                                                         │
+               │                                              [PPO Contextual Bandit Policy]
+               │                                                         │
+               └────────────────────────────┬────────────────────────────┘
+                                            │
+                                  PPO Selects Strategy
+                                            │
+                ┌───────────────────┬───────┴───────┬───────────────────┐
+                ▼                   ▼               ▼                   ▼
+            Action 0            Action 1        Action 2            Action 3
+        Global Adapter      Local Adapter   Boundary Adapter    Texture Adapter
+       (Context + Perc)    (Hole L1 + SSIM) (Sobel Edge Loss)   (2D FFT Freq)
+                │                   │               │                   │
+                └───────────────────┼───────────────┴───────────────────┘
+                                    │
+                                    ▼
+                      Final Reconstructed Inpainting
 ```
-                        RL-GAN Pipeline
-                               │
-               ┌───────────────┴───────────────┐
-               │                               │
-       DeepFill v2 GAN                   PPO Controller
-               │                               │
-    - 4-Channel Encoder Backbone       - 261-dim Observation State
-    - Coarse Network                   - 4 Discrete Strategies (Bandit)
-    - Strategy FiLM Modulation Layer   - Multi-Step with STOP (V2)
-    - Refinement Network               - Quality Gain + Action Cost Reward
-    - SN-PatchGAN Discriminator
-               │                               │
-               └───────────────┬───────────────┘
-                               │
-                     Comprehensive Evaluation
-                               │
-       ┌───────────────┬───────┴───────┬───────────────┐
-       │               │               │               │
-    PSNR/SSIM        LPIPS     Action Distribution  Severity Buckets
-                                                    (10-20%, 20-40%,
-                                                     40-60%, 60%+)
-```
+
+### Key Components:
+1. **Backbone Generator**: Pretrained **DeepFillv2** with Gated Convolutions (Places2 weights, 84 parameters, frozen).
+2. **Strategy Adapters**: 4 lightweight convolution heads, each trained with specialized loss objectives:
+   - **Action 0 (`Global Completion`)**: Balanced hole/valid $L_1$ + Perceptual VGG loss.
+   - **Action 1 (`Local Refinement`)**: $6.0\times$ hole-focused $L_1$ + SSIM loss.
+   - **Action 2 (`Boundary Refinement`)**: Sobel edge-gradient boundary ring loss.
+   - **Action 3 (`Texture Refinement`)**: 2D Fast Fourier Transform (FFT) frequency magnitude loss.
+3. **PPO Contextual Bandit**: Stable-Baselines3 PPO agent operating in 1-step episodes ($\gamma = 0.0$), selecting the optimal adapter to maximize:
+   $$\text{Reward} = \Delta \text{PSNR} + \Delta \text{SSIM} - 0.5 \cdot \Delta \text{LPIPS} + 0.3 \cdot \Delta \text{Discriminator} - \text{ActionCost}$$
 
 ---
 
-## ⚡ Quickstart with `uv`
+## 📦 Dataset & Checkpoints Download
 
-### 1. Installation & Environment Sync
-Ensure [`uv`](https://github.com/astral-sh/uv) is installed:
+### 1. Download COCO Dataset (Val2017)
+The adapters and PPO agent are trained on real-world scenes from the **COCO 2017 Validation Set** (5,000 images):
+
+```bash
+# Automated download & extraction:
+python scripts/download_coco.py
+```
+
+*Manual alternative:*
+1. Download `val2017.zip` from [http://images.cocodataset.org/zips/val2017.zip](http://images.cocodataset.org/zips/val2017.zip) (815 MB).
+2. Extract the archive into `data/raw/val2017/`.
+3. The folder should contain 5,000 `.jpg` files (`data/raw/val2017/*.jpg`).
+
+### 2. Download Pretrained DeepFillV2 Backbone
+The base inpainting generator uses pretrained Places2 weights:
+
+```bash
+# Automated download:
+python scripts/download_gan.py
+```
+*Destination path:* `checkpoints/pretrained/deepfillv2_places2.pth`
+
+---
+
+## ⚡ Environment Setup
+
+Using [`uv`](https://github.com/astral-sh/uv) (recommended):
 ```bash
 # Clone the repository
 git clone https://github.com/Hariprasaadh/rl-gan-inpainting.git
 cd rl-gan-inpainting
 
-# Setup virtual environment and sync dependencies
+# Install all dependencies with CUDA 12.4 support
 uv sync
 ```
 
-### 2. Run Test Suite (Gate Rule Verification)
+Alternatively using standard Python venv:
 ```bash
-uv run pytest tests/ -v
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
 ---
 
-## 🚀 Execution & Workflows
+## 🚀 Step-by-Step Training Guide
 
-### 1. Generate Deterministic Evaluation Masks
-Generate fixed evaluation masks partitioned by missing-area severity:
+### Step 1: Pretrain the 4 Strategy Adapters on COCO
+Trains the 4 adapters with differentiated loss functions while keeping the DeepFillV2 backbone frozen:
 ```bash
-uv run python main.py generate-eval-masks --count 25 --image-size 256 --output-dir data/masks/fixed_eval_masks
+python main.py pretrain-adapters --config configs/pretrain_adapters.yaml
+```
+- **Configuration**: [configs/pretrain_adapters.yaml](configs/pretrain_adapters.yaml)
+- **Output checkpoint**: `checkpoints/adapters/adapters_final.pt`
+
+### Step 2: Verify Strategy Diversity
+Checks that the 4 adapters produce distinct outputs and verifies state encoder variance before running RL:
+```bash
+python main.py verify-strategies --data-dir data/raw/val2017 --num-images 5 --output-dir results/strategy_verify
 ```
 
-### 2. Experiment A: Pretrain GAN Baseline (Fixed Neutral Strategy)
+### Step 3: Train PPO Contextual Bandit Policy
+Trains the PPO policy to evaluate hole attributes and dynamically select the optimal adapter:
 ```bash
-uv run python main.py train-gan --config configs/pretrain_gan.yaml --epochs 10
+python main.py train-rl --config configs/rl_agent_bandit.yaml --timesteps 10000
 ```
-
-### 3. Experiment B: Train RL PPO Contextual Bandit (Frozen GAN)
-```bash
-uv run python main.py train-rl --config configs/rl_agent_bandit.yaml --timesteps 50000
-```
-
-### 4. Experiments C & D: Run Ablation Studies
-```bash
-# Experiment C (No mask stats in state) & Experiment D (No perceptual reward)
-uv run python main.py train-ablations --mode all --timesteps 10000
-```
-
-### 5. Experiment E: Optional Joint Fine-Tuning
-```bash
-uv run python main.py joint-finetune --config configs/joint_finetune.yaml --epochs 5
-```
-
-### 6. Benchmark Evaluation & Hypothesis Testing
-Runs evaluation across models, generates the Ablation Table, Action Distribution histograms, and Mask Severity Buckets:
-```bash
-uv run python main.py evaluate --samples 100 --output-dir results
-```
-
-### 7. Interactive Visual Demonstration
-Generate a side-by-side comparison grid `[Ground Truth | Masked | Coarse | Baseline GAN | RL-GAN]`:
-```bash
-uv run python main.py demo --sample-idx 0 --output-dir results
-```
+- **Configuration**: [configs/rl_agent_bandit.yaml](configs/rl_agent_bandit.yaml)
+- **Output checkpoint**: `checkpoints/rl_agent_bandit/ppo_bandit_final.zip`
+- **TensorBoard logs**: View training curves with `tensorboard --logdir logs/rl_agent_bandit`
 
 ---
 
-## 📊 Action Space & Strategies
+## 📊 Benchmark Evaluation & Ablation
 
-| Action ID | Strategy Name | Description | Computation Cost $C(a_t)$ |
-|:---:|:---:|---|:---:|
-| **0** | `Global Completion` | Broad contextual receptive field modulation | 0.00 (Free) |
-| **1** | `Local Refinement` | High spatial mask attention on missing region | 0.10 |
-| **2** | `Boundary Refinement`| Transition and edge gradient preservation | 0.15 |
-| **3** | `Texture Refinement` | High-frequency detail and residual boost | 0.20 |
-| **4** | `Stop` | Ends multi-step refinement early (Version 2) | 0.00 |
+Run the 4-stage honest ablation test across diverse real-world images:
+```bash
+python scripts/run_multi_image_test.py
+```
 
-### Improvement-Based Reward Function:
-$$R_t = \alpha \Delta\text{PSNR} + \beta \Delta\text{SSIM} - \gamma \Delta\text{LPIPS} + \delta \Delta D - \lambda C(a_t)$$
+### 4-Stage Ablation Framework:
+| Stage | Model Configuration | Method | Scientifically Valid? |
+|:---:|---|---|:---:|
+| **Stage A** | DeepFillV2 Backbone Only | Pretrained baseline (0 adapters) | ✅ Yes |
+| **Stage B** | Fixed Adapter Baseline | Default Action 0 (Global) | ✅ Yes |
+| **Stage C** | **RL-GAN Adaptive Inference** | **PPO dynamically selects adapter** | ✅ **Yes (Core Test)** |
+| **Stage D** | PPO + Test-Time Refinement | 400-step AdamW fine-tuning | ⚠️ Oracle Benchmark (uses GT) |
+
+Detailed metrics and side-by-side grids are generated in `results/multi_image_evaluation_report.md` and `results/demo_image_*.png`.
 
 ---
 
-## 🧪 Evaluation Severity Buckets
+## 🌐 Interactive Web Application
 
-Hypothesis: **Adaptive RL-guided restoration yields greater relative improvement ($\Delta\text{PSNR}$) as missing region complexity and coverage increase.**
+Launch the local web studio with an interactive drawing canvas, real-time telemetry, and a before/after split slider:
 
-| Missing Area | GAN Baseline (PSNR) | RL-GAN (PSNR) | $\Delta$ Gain | Status |
-|:---:|:---:|:---:|:---:|:---:|
-| **10–20%** | Baseline | Moderate Gain | $+\Delta_1$ | Verified |
-| **20–40%** | Baseline | Strong Gain | $+\Delta_2$ | Verified |
-| **40–60%** | Baseline | High Gain | $+\Delta_3$ | Verified |
-| **60%+** | Baseline | Maximum Gain | $+\Delta_4$ ($\Delta_4 > \Delta_1$) | Verified |
+```bash
+python app.py
+```
+Open **`http://localhost:7860`** in your browser.
+
+- **Source & Mask Studio**: Draw custom brush masks or test on curated preset photos.
+- **Inference Mode**: Defaults to **Instant Forward Pass (15ms)** using GPU acceleration.
+- **5-Stage Pipeline View**: Inspect Ground Truth, Masked Input, Coarse Pass, Baseline GAN, and RL-GAN Adaptive output.
 
 ---
 
 ## 📁 Repository Structure
 
-```
+```text
 rl-gan-inpainting/
+├── app.py                         # Interactive Web Application server
+├── main.py                        # CLI entrypoint for training & evaluation
+├── pyproject.toml                 # Project metadata and uv dependencies
 ├── configs/
-│   ├── pretrain_gan.yaml          # Exp A: Baseline GAN
-│   ├── rl_agent_bandit.yaml       # Exp B: Contextual Bandit PPO
-│   ├── rl_agent_multistep.yaml    # Exp B (v2): Multi-step with STOP
-│   └── joint_finetune.yaml        # Exp E: Joint fine-tuning
+│   ├── pretrain_adapters.yaml     # Stage 2: Adapter pretraining configuration
+│   ├── rl_agent_bandit.yaml       # Stage 4: PPO Contextual Bandit configuration
+│   └── pretrain_gan.yaml          # Baseline GAN configuration
 ├── data/
-│   ├── raw/                       # Places2 / CelebA-HQ
-│   ├── processed/
-│   └── masks/fixed_eval_masks/    # Seeded deterministic evaluation masks
+│   ├── raw/
+│   │   ├── sample_images/         # Curated preset demo images
+│   │   └── val2017/               # (Git-ignored) 5,000 COCO images
+│   └── masks/fixed_eval_masks/    # Deterministic test masks partitioned by severity
+├── checkpoints/                   # (Git-ignored) Model weights
+│   ├── pretrained/                # deepfillv2_places2.pth
+│   ├── adapters/                  # adapters_final.pt
+│   └── rl_agent_bandit/           # ppo_bandit_final.zip
 ├── src/
-│   ├── data/                      # Dataset, transforms, dynamic/fixed mask generation
-│   ├── models/                    # Gated-Conv Generator, Encoder, SN-PatchGAN, Losses
-│   ├── rl/                        # Bandit & Multi-Step Gym Envs, Actions, State, Reward
-│   ├── training/                  # Training loops for Experiments A, B, C, D, E
-│   ├── baselines/                 # Pretrained LaMa reference wrapper
-│   ├── evaluation/                # Metrics, Severity Evaluator, Ablation Table generator
-│   └── utils/                     # Logger, Seed helper
-├── tests/                         # Gate rule unit test suite
-├── notebooks/                     # Google Colab quickstart
-├── scripts/                       # Dataset & checkpoint download scripts
-├── pyproject.toml                 # uv package configuration
-└── main.py                        # Unified CLI entrypoint
+│   ├── data/                      # Dataset loader, transforms, irregular mask generator
+│   ├── models/                    # DeepFillV2, Strategy Adapters, Losses, Encoder
+│   ├── rl/                        # Bandit Gym Environment, StateBuilder, Rewards
+│   └── training/                  # Adapter trainer, PPO bandit trainer
+├── scripts/
+│   ├── download_coco.py           # Automated COCO val2017 downloader
+│   ├── download_gan.py            # DeepFillV2 checkpoint downloader
+│   ├── run_multi_image_test.py    # 4-stage quantitative evaluation script
+│   └── verify_strategies.py       # Strategy diversity verification
+└── web/
+    ├── index.html                 # Web studio interface
+    ├── style.css                  # Dark-mode styling
+    └── app.js                     # Canvas drawing & API integration
 ```
+
+---
+
+## 📜 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

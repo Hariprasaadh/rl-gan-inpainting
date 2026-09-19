@@ -57,6 +57,40 @@ class GatedConv2d(nn.Module):
         return feat * gate
 
 
+class DeepFillEncoder(nn.Module):
+    """Encoder that reuses DeepFill-v2 bottleneck features.
+
+    Extracts the 4*cnum=192 channel bottleneck from the frozen Stage-1
+    coarse generator, average-pools and projects to 256-d via a trainable
+    linear head. No extra forward pass beyond the backbone's own encoding.
+    Falls back to a small GatedConv stem if no bottleneck is provided.
+    """
+
+    def __init__(self, cnum: int = 48, latent_dim: int = 256):
+        super().__init__()
+        self.cnum = cnum
+        self.latent_dim = latent_dim
+        in_ch = 2 * cnum  # 96 (matching Stage 1 bottleneck at conv10_atrous)
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.state_head = nn.Sequential(
+            nn.Linear(in_ch, latent_dim),
+            nn.LayerNorm(latent_dim),
+            nn.ELU(inplace=True),
+            nn.Linear(latent_dim, latent_dim),
+        )
+
+    def forward(self, bottleneck: torch.Tensor) -> torch.Tensor:
+        """Project bottleneck to 256-d state vector.
+
+        Args:
+            bottleneck: (B, 4*cnum, H/4, W/4) from DeepFillV2Generator.get_bottleneck_feature
+        Returns:
+            (B, latent_dim)
+        """
+        pooled = self.pool(bottleneck).flatten(1)
+        return self.state_head(pooled)
+
+
 class InpaintingEncoder(nn.Module):
     """Shared 4-channel encoder backbone.
 

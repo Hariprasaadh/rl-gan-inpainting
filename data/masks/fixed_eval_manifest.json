@@ -1,0 +1,505 @@
+{
+  "pairs": [
+    {
+      "image": "data/raw/val2017\\000000000139.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0000.png",
+      "index": 0
+    },
+    {
+      "image": "data/raw/val2017\\000000000285.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0001.png",
+      "index": 1
+    },
+    {
+      "image": "data/raw/val2017\\000000000632.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0002.png",
+      "index": 2
+    },
+    {
+      "image": "data/raw/val2017\\000000000724.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0003.png",
+      "index": 3
+    },
+    {
+      "image": "data/raw/val2017\\000000000776.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0004.png",
+      "index": 4
+    },
+    {
+      "image": "data/raw/val2017\\000000000785.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0005.png",
+      "index": 5
+    },
+    {
+      "image": "data/raw/val2017\\000000000802.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0006.png",
+      "index": 6
+    },
+    {
+      "image": "data/raw/val2017\\000000000872.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0007.png",
+      "index": 7
+    },
+    {
+      "image": "data/raw/val2017\\000000000885.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0008.png",
+      "index": 8
+    },
+    {
+      "image": "data/raw/val2017\\000000001000.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0009.png",
+      "index": 9
+    },
+    {
+      "image": "data/raw/val2017\\000000001268.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0010.png",
+      "index": 10
+    },
+    {
+      "image": "data/raw/val2017\\000000001296.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0011.png",
+      "index": 11
+    },
+    {
+      "image": "data/raw/val2017\\000000001353.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0012.png",
+      "index": 12
+    },
+    {
+      "image": "data/raw/val2017\\000000001425.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0013.png",
+      "index": 13
+    },
+    {
+      "image": "data/raw/val2017\\000000001490.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0014.png",
+      "index": 14
+    },
+    {
+      "image": "data/raw/val2017\\000000001503.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0015.png",
+      "index": 15
+    },
+    {
+      "image": "data/raw/val2017\\000000001532.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0016.png",
+      "index": 16
+    },
+    {
+      "image": "data/raw/val2017\\000000001584.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0017.png",
+      "index": 17
+    },
+    {
+      "image": "data/raw/val2017\\000000001675.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0018.png",
+      "index": 18
+    },
+    {
+      "image": "data/raw/val2017\\000000001761.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0019.png",
+      "index": 19
+    },
+    {
+      "image": "data/raw/val2017\\000000001818.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0020.png",
+      "index": 20
+    },
+    {
+      "image": "data/raw/val2017\\000000001993.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0021.png",
+      "index": 21
+    },
+    {
+      "image": "data/raw/val2017\\000000002006.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0022.png",
+      "index": 22
+    },
+    {
+      "image": "data/raw/val2017\\000000002149.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0023.png",
+      "index": 23
+    },
+    {
+      "image": "data/raw/val2017\\000000002153.jpg",
+      "mask": "data/masks/fixed_eval_masks\\10-20pct\\mask_0024.png",
+      "index": 24
+    },
+    {
+      "image": "data/raw/val2017\\000000002157.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0000.png",
+      "index": 25
+    },
+    {
+      "image": "data/raw/val2017\\000000002261.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0001.png",
+      "index": 26
+    },
+    {
+      "image": "data/raw/val2017\\000000002299.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0002.png",
+      "index": 27
+    },
+    {
+      "image": "data/raw/val2017\\000000002431.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0003.png",
+      "index": 28
+    },
+    {
+      "image": "data/raw/val2017\\000000002473.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0004.png",
+      "index": 29
+    },
+    {
+      "image": "data/raw/val2017\\000000002532.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0005.png",
+      "index": 30
+    },
+    {
+      "image": "data/raw/val2017\\000000002587.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0006.png",
+      "index": 31
+    },
+    {
+      "image": "data/raw/val2017\\000000002592.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0007.png",
+      "index": 32
+    },
+    {
+      "image": "data/raw/val2017\\000000002685.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0008.png",
+      "index": 33
+    },
+    {
+      "image": "data/raw/val2017\\000000002923.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0009.png",
+      "index": 34
+    },
+    {
+      "image": "data/raw/val2017\\000000003156.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0010.png",
+      "index": 35
+    },
+    {
+      "image": "data/raw/val2017\\000000003255.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0011.png",
+      "index": 36
+    },
+    {
+      "image": "data/raw/val2017\\000000003501.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0012.png",
+      "index": 37
+    },
+    {
+      "image": "data/raw/val2017\\000000003553.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0013.png",
+      "index": 38
+    },
+    {
+      "image": "data/raw/val2017\\000000003661.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0014.png",
+      "index": 39
+    },
+    {
+      "image": "data/raw/val2017\\000000003845.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0015.png",
+      "index": 40
+    },
+    {
+      "image": "data/raw/val2017\\000000003934.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0016.png",
+      "index": 41
+    },
+    {
+      "image": "data/raw/val2017\\000000004134.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0017.png",
+      "index": 42
+    },
+    {
+      "image": "data/raw/val2017\\000000004395.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0018.png",
+      "index": 43
+    },
+    {
+      "image": "data/raw/val2017\\000000004495.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0019.png",
+      "index": 44
+    },
+    {
+      "image": "data/raw/val2017\\000000004765.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0020.png",
+      "index": 45
+    },
+    {
+      "image": "data/raw/val2017\\000000004795.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0021.png",
+      "index": 46
+    },
+    {
+      "image": "data/raw/val2017\\000000005001.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0022.png",
+      "index": 47
+    },
+    {
+      "image": "data/raw/val2017\\000000005037.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0023.png",
+      "index": 48
+    },
+    {
+      "image": "data/raw/val2017\\000000005060.jpg",
+      "mask": "data/masks/fixed_eval_masks\\20-40pct\\mask_0024.png",
+      "index": 49
+    },
+    {
+      "image": "data/raw/val2017\\000000005193.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0000.png",
+      "index": 50
+    },
+    {
+      "image": "data/raw/val2017\\000000005477.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0001.png",
+      "index": 51
+    },
+    {
+      "image": "data/raw/val2017\\000000005503.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0002.png",
+      "index": 52
+    },
+    {
+      "image": "data/raw/val2017\\000000005529.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0003.png",
+      "index": 53
+    },
+    {
+      "image": "data/raw/val2017\\000000005586.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0004.png",
+      "index": 54
+    },
+    {
+      "image": "data/raw/val2017\\000000005600.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0005.png",
+      "index": 55
+    },
+    {
+      "image": "data/raw/val2017\\000000005992.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0006.png",
+      "index": 56
+    },
+    {
+      "image": "data/raw/val2017\\000000006012.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0007.png",
+      "index": 57
+    },
+    {
+      "image": "data/raw/val2017\\000000006040.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0008.png",
+      "index": 58
+    },
+    {
+      "image": "data/raw/val2017\\000000006213.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0009.png",
+      "index": 59
+    },
+    {
+      "image": "data/raw/val2017\\000000006460.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0010.png",
+      "index": 60
+    },
+    {
+      "image": "data/raw/val2017\\000000006471.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0011.png",
+      "index": 61
+    },
+    {
+      "image": "data/raw/val2017\\000000006614.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0012.png",
+      "index": 62
+    },
+    {
+      "image": "data/raw/val2017\\000000006723.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0013.png",
+      "index": 63
+    },
+    {
+      "image": "data/raw/val2017\\000000006763.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0014.png",
+      "index": 64
+    },
+    {
+      "image": "data/raw/val2017\\000000006771.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0015.png",
+      "index": 65
+    },
+    {
+      "image": "data/raw/val2017\\000000006818.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0016.png",
+      "index": 66
+    },
+    {
+      "image": "data/raw/val2017\\000000006894.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0017.png",
+      "index": 67
+    },
+    {
+      "image": "data/raw/val2017\\000000006954.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0018.png",
+      "index": 68
+    },
+    {
+      "image": "data/raw/val2017\\000000007088.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0019.png",
+      "index": 69
+    },
+    {
+      "image": "data/raw/val2017\\000000007108.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0020.png",
+      "index": 70
+    },
+    {
+      "image": "data/raw/val2017\\000000007278.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0021.png",
+      "index": 71
+    },
+    {
+      "image": "data/raw/val2017\\000000007281.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0022.png",
+      "index": 72
+    },
+    {
+      "image": "data/raw/val2017\\000000007386.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0023.png",
+      "index": 73
+    },
+    {
+      "image": "data/raw/val2017\\000000007511.jpg",
+      "mask": "data/masks/fixed_eval_masks\\40-60pct\\mask_0024.png",
+      "index": 74
+    },
+    {
+      "image": "data/raw/val2017\\000000007574.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0000.png",
+      "index": 75
+    },
+    {
+      "image": "data/raw/val2017\\000000007784.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0001.png",
+      "index": 76
+    },
+    {
+      "image": "data/raw/val2017\\000000007795.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0002.png",
+      "index": 77
+    },
+    {
+      "image": "data/raw/val2017\\000000007816.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0003.png",
+      "index": 78
+    },
+    {
+      "image": "data/raw/val2017\\000000007818.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0004.png",
+      "index": 79
+    },
+    {
+      "image": "data/raw/val2017\\000000007888.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0005.png",
+      "index": 80
+    },
+    {
+      "image": "data/raw/val2017\\000000007977.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0006.png",
+      "index": 81
+    },
+    {
+      "image": "data/raw/val2017\\000000007991.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0007.png",
+      "index": 82
+    },
+    {
+      "image": "data/raw/val2017\\000000008021.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0008.png",
+      "index": 83
+    },
+    {
+      "image": "data/raw/val2017\\000000008211.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0009.png",
+      "index": 84
+    },
+    {
+      "image": "data/raw/val2017\\000000008277.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0010.png",
+      "index": 85
+    },
+    {
+      "image": "data/raw/val2017\\000000008532.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0011.png",
+      "index": 86
+    },
+    {
+      "image": "data/raw/val2017\\000000008629.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0012.png",
+      "index": 87
+    },
+    {
+      "image": "data/raw/val2017\\000000008690.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0013.png",
+      "index": 88
+    },
+    {
+      "image": "data/raw/val2017\\000000008762.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0014.png",
+      "index": 89
+    },
+    {
+      "image": "data/raw/val2017\\000000008844.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0015.png",
+      "index": 90
+    },
+    {
+      "image": "data/raw/val2017\\000000008899.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0016.png",
+      "index": 91
+    },
+    {
+      "image": "data/raw/val2017\\000000009378.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0017.png",
+      "index": 92
+    },
+    {
+      "image": "data/raw/val2017\\000000009400.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0018.png",
+      "index": 93
+    },
+    {
+      "image": "data/raw/val2017\\000000009448.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0019.png",
+      "index": 94
+    },
+    {
+      "image": "data/raw/val2017\\000000009483.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0020.png",
+      "index": 95
+    },
+    {
+      "image": "data/raw/val2017\\000000009590.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0021.png",
+      "index": 96
+    },
+    {
+      "image": "data/raw/val2017\\000000009769.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0022.png",
+      "index": 97
+    },
+    {
+      "image": "data/raw/val2017\\000000009772.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0023.png",
+      "index": 98
+    },
+    {
+      "image": "data/raw/val2017\\000000009891.jpg",
+      "mask": "data/masks/fixed_eval_masks\\60pctplus\\mask_0024.png",
+      "index": 99
+    }
+  ],
+  "total": 100
+}

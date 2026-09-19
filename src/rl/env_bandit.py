@@ -8,9 +8,14 @@ import torch.nn as nn
 from src.rl.actions import ACTION_NAMES, get_action_cost
 from src.rl.state import StateBuilder
 from src.rl.reward import compute_image_metrics, compute_reward
-from src.models.generator import InpaintingGenerator
 from src.models.discriminator import SNPatchGANDiscriminator
 from src.data.dataset import InpaintingDataset
+
+# Prefer new backbone; fallback to legacy generator for backward compat
+try:
+    from src.models.rl_inpainting_model import RLInpaintingModel as InpaintingGenerator
+except ImportError:
+    from src.models.generator import InpaintingGenerator  # type: ignore
 
 
 class InpaintingBanditEnv(gym.Env):

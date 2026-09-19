@@ -5,7 +5,10 @@ from stable_baselines3 import PPO
 
 from src.data.mask_generator import get_severity_bucket
 from src.data.dataset import InpaintingDataset
-from src.models.generator import InpaintingGenerator
+try:
+    from src.models.rl_inpainting_model import RLInpaintingModel as InpaintingGenerator
+except ImportError:
+    from src.models.generator import InpaintingGenerator  # type: ignore
 from src.rl.actions import ACTION_NAMES
 from src.rl.state import StateBuilder
 from src.evaluation.metrics import InpaintingMetricEvaluator

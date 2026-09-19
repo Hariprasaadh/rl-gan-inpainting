@@ -1,28 +1,33 @@
-# RL Contextual Bandit (Experiment B) Configuration
+# RL Contextual Bandit (Experiment B) Configuration — Stage 3 updated
 data:
-  image_dir: "data/raw/sample_images"
+  image_dir: "data/raw/val2017"
   mask_dir: null
-  image_size: 128
+  image_size: 256
+  batch_size: null  # RL env uses single images
   synthetic_size: 200
 
 model:
-  base_channels: 32
+  cnum: 48
+  cnum_in: 5
   strategy_dim: 64
   latent_dim: 256
-  checkpoint_gan: "checkpoints/gan_baseline/best_model.pt"
+  base_channels: 32  # kept for backward compat
+  backbone_checkpoint: "checkpoints/pretrained/deepfillv2_places2.pth"
+  adapters_checkpoint: "checkpoints/adapters/adapters_final.pt"
+  checkpoint_gan: "checkpoints/gan_baseline/best_model.pt"  # fallback legacy
 
 rl:
-  total_timesteps: 1000      # Fast run for development, scale up with CLI
-  n_steps: 64
-  batch_size: 16
+  total_timesteps: 5000   # start small, scale to 50000
+  n_steps: 128
+  batch_size: 32
   n_epochs: 4
   learning_rate: 0.0003
-  gamma: 0.0                 # 0.0 for 1-step contextual bandit
-  ent_coef: 0.01             # Encourage strategy exploration
+  gamma: 0.0                 # contextual bandit
+  ent_coef: 0.05             # increased from 0.01 to encourage exploration
   vf_coef: 0.5
   max_grad_norm: 0.5
-  reward_weights: [1.0, 1.0, 0.5, 0.5, 0.3]  # (dPSNR, dSSIM, dLPIPS, dDisc, cost)
-  compute_lpips: false       # Set true for full perceptual reward
+  reward_weights: [1.0, 1.0, 0.5, 0.3, 0.1]
+  compute_lpips: true
   device: "cuda"
   seed: 42
   save_dir: "checkpoints/rl_agent_bandit"

@@ -8,7 +8,13 @@ import torchvision.transforms as T
 from src.data.mask_generator import generate_fixed_eval_masks
 from src.data.dataset import InpaintingDataset
 from src.data.transforms import denormalize_image, feather_composite
-from src.models.generator import InpaintingGenerator
+try:
+    from src.models.rl_inpainting_model import RLInpaintingModel
+    _HasRLModel = True
+except ImportError:
+    _HasRLModel = False
+    from src.models.generator import InpaintingGenerator as RLInpaintingModel  # fallback
+from src.models.generator import InpaintingGenerator  # legacy for train-gan fallback
 from src.models.discriminator import SNPatchGANDiscriminator
 from src.training.pretrain_gan import train_gan_baseline
 from src.training.train_rl_bandit import train_rl_bandit
@@ -66,10 +72,29 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
         synthetic_size=args.samples,
         fixed_seed=42,
     )
-    generator = InpaintingGenerator(base_channels=32, strategy_dim=64, latent_dim=256)
-    if args.gan_checkpoint and os.path.exists(args.gan_checkpoint):
-        ckpt = torch.load(args.gan_checkpoint, map_location=args.device, weights_only=False)
-        generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
+    # Prefer new model; fallback legacy
+    if _HasRLModel:
+        generator = RLInpaintingModel(cnum=48, strategy_dim=64, latent_dim=256)
+        if args.gan_checkpoint and os.path.exists(args.gan_checkpoint):
+            # Try legacy gan checkpoint as fallback
+            try:
+                ckpt = torch.load(args.gan_checkpoint, map_location=args.device, weights_only=False)
+                if "generator_state_dict" in ckpt:
+                    generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
+                elif "adapters" in ckpt or "adapters_state_dict" in ckpt:
+                    generator.load_adapters(args.gan_checkpoint)
+            except Exception as e:
+                print(f"Warning: could not load GAN checkpoint {args.gan_checkpoint}: {e}")
+        # Try backbone + adapters checkpoints if provided via alternative paths
+        if hasattr(args, 'backbone_checkpoint') and args.backbone_checkpoint and os.path.exists(args.backbone_checkpoint):
+            generator.load_pretrained_backbone(args.backbone_checkpoint)
+        if hasattr(args, 'adapters_checkpoint') and args.adapters_checkpoint and os.path.exists(args.adapters_checkpoint):
+            generator.load_adapters(args.adapters_checkpoint)
+    else:
+        generator = InpaintingGenerator(base_channels=32, strategy_dim=64, latent_dim=256)
+        if args.gan_checkpoint and os.path.exists(args.gan_checkpoint):
+            ckpt = torch.load(args.gan_checkpoint, map_location=args.device, weights_only=False)
+            generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
 
     evaluate_all(
         dataset=dataset,
@@ -78,6 +103,84 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
         output_dir=args.output_dir,
         device=args.device,
         num_samples=args.samples,
+    )
+
+
+# ---- New Stage 1-4 commands ----
+
+def cmd_download_deepfill(args: argparse.Namespace) -> None:
+    """Print DeepFill-v2 checkpoint download instructions."""
+    print("""
+=== DeepFill-v2 Pretrained Checkpoint ===
+
+Preferred checkpoint: nipponjo/deepfillv2-pytorch  states_pt_places2.pth
+Alternative:         states_tf_places2.pth (uses networks_tf.py / same_padding)
+
+Steps:
+1. Visit: https://github.com/nipponjo/deepfillv2-pytorch
+2. Follow README Google Drive link to download states_pt_places2.pth
+   (or states_tf_places2.pth if PT not available)
+3. Place at: checkpoints/pretrained/deepfillv2_places2.pth
+
+PowerShell download (if direct link available):
+  New-Item -ItemType Directory -Force -Path checkpoints/pretrained | Out-Null
+  # Replace URL with actual Drive direct link via gdown or manual download
+  # pip install gdown; gdown <file_id> -O checkpoints/pretrained/deepfillv2_places2.pth
+
+Verify:
+  python -c "import torch; ckpt=torch.load('checkpoints/pretrained/deepfillv2_places2.pth', map_location='cpu', weights_only=False); print(list(ckpt.keys())[:5])"
+
+COCO val2017 for adapter training:
+  Invoke-WebRequest -Uri "http://images.cocodataset.org/zips/val2017.zip" -OutFile "data/raw/val2017.zip"
+  Expand-Archive "data/raw/val2017.zip" -DestinationPath "data/raw/"
+""")
+
+
+def cmd_pretrain_adapters(args: argparse.Namespace) -> None:
+    """Pretrain 4 strategy adapters with differentiated losses."""
+    from src.training.pretrain_adapters import pretrain_adapters
+    pretrain_adapters(config_path=args.config)
+
+
+def cmd_verify_strategies(args: argparse.Namespace) -> None:
+    """Verify strategy diversity checkpoint before PPO."""
+    from scripts.verify_strategies import verify_strategies
+    verify_strategies(
+        backbone_checkpoint=args.backbone_checkpoint,
+        adapters_checkpoint=args.adapters_checkpoint,
+        data_dir=args.data_dir,
+        image_size=args.image_size,
+        num_images=args.num_images,
+        output_dir=args.output_dir,
+        device=args.device,
+        state_only=args.state_only,
+    )
+
+
+def cmd_create_eval_set(args: argparse.Namespace) -> None:
+    """Create 100 fixed balanced evaluation pairs."""
+    from scripts.create_eval_set import create_eval_set
+    create_eval_set(
+        image_dir=args.image_dir,
+        mask_output_dir=args.output_dir,
+        count_per_bucket=args.count,
+        image_size=args.image_size,
+        seed=args.seed,
+    )
+
+
+def cmd_eval_baseline(args: argparse.Namespace) -> None:
+    """Run DeepFill-v2 backbone baseline (Experiment A)."""
+    from scripts.evaluate_baseline import evaluate_baseline
+    evaluate_baseline(
+        backbone_checkpoint=args.backbone_checkpoint,
+        data_dir=args.data_dir,
+        mask_dir=args.mask_dir,
+        image_size=args.image_size,
+        num_samples=args.samples,
+        device=args.device,
+        output_dir=args.output_dir,
+        compute_lpips=args.compute_lpips,
     )
 
 
@@ -98,10 +201,24 @@ def cmd_demo(args: argparse.Namespace) -> None:
     mask = sample["mask"].unsqueeze(0).to(device)
     masked_image = sample["masked_image"].unsqueeze(0).to(device)
 
-    generator = InpaintingGenerator(base_channels=32, strategy_dim=64, latent_dim=256).to(device).eval()
-    if args.gan_checkpoint and os.path.exists(args.gan_checkpoint):
-        ckpt = torch.load(args.gan_checkpoint, map_location=device, weights_only=False)
-        generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
+    # Use RLInpaintingModel if available
+    if _HasRLModel:
+        generator = RLInpaintingModel(cnum=48, strategy_dim=64, latent_dim=256).to(device).eval()
+        # Try to load backbone/adapters if provided
+        if args.gan_checkpoint and os.path.exists(args.gan_checkpoint):
+            try:
+                ckpt = torch.load(args.gan_checkpoint, map_location=device, weights_only=False)
+                if "generator_state_dict" in ckpt:
+                    generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
+                else:
+                    generator.load_adapters(args.gan_checkpoint)
+            except Exception:
+                pass
+    else:
+        generator = InpaintingGenerator(base_channels=32, strategy_dim=64, latent_dim=256).to(device).eval()
+        if args.gan_checkpoint and os.path.exists(args.gan_checkpoint):
+            ckpt = torch.load(args.gan_checkpoint, map_location=device, weights_only=False)
+            generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
 
     with torch.no_grad():
         # Coarse pass
@@ -204,6 +321,43 @@ def main() -> None:
     p_demo.add_argument("--image-size", type=int, default=128)
     p_demo.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
 
+    # Command: download-deepfill
+    p_dl = subparsers.add_parser("download-deepfill", help="Print DeepFill-v2 download instructions")
+    
+    # Command: pretrain-adapters
+    p_pa = subparsers.add_parser("pretrain-adapters", help="Pretrain 4 strategy adapters (before PPO)")
+    p_pa.add_argument("--config", type=str, default="configs/pretrain_adapters.yaml")
+
+    # Command: verify-strategies
+    p_vs = subparsers.add_parser("verify-strategies", help="Verify strategy diversity (checkpoint before PPO)")
+    p_vs.add_argument("--backbone-checkpoint", type=str, default="checkpoints/pretrained/deepfillv2_places2.pth")
+    p_vs.add_argument("--adapters-checkpoint", type=str, default="checkpoints/adapters/adapters_final.pt")
+    p_vs.add_argument("--data-dir", type=str, default="data/raw/sample_images")
+    p_vs.add_argument("--image-size", type=int, default=256)
+    p_vs.add_argument("--num-images", type=int, default=5)
+    p_vs.add_argument("--output-dir", type=str, default="results/strategy_verify")
+    p_vs.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    p_vs.add_argument("--state-only", action="store_true", help="Only check state embedding variance")
+
+    # Command: create-eval-set
+    p_ces = subparsers.add_parser("create-eval-set", help="Create 100 fixed balanced eval pairs")
+    p_ces.add_argument("--image-dir", type=str, default="data/raw/val2017")
+    p_ces.add_argument("--output-dir", type=str, default="data/masks/fixed_eval_masks")
+    p_ces.add_argument("--count", type=int, default=25, help="Masks per severity bucket")
+    p_ces.add_argument("--image-size", type=int, default=256)
+    p_ces.add_argument("--seed", type=int, default=42)
+
+    # Command: eval-baseline
+    p_eb = subparsers.add_parser("eval-baseline", help="Evaluate DeepFill-v2 backbone baseline (Experiment A)")
+    p_eb.add_argument("--backbone-checkpoint", type=str, default="checkpoints/pretrained/deepfillv2_places2.pth")
+    p_eb.add_argument("--data-dir", type=str, default="data/raw/sample_images")
+    p_eb.add_argument("--mask-dir", type=str, default=None)
+    p_eb.add_argument("--image-size", type=int, default=256)
+    p_eb.add_argument("--samples", type=int, default=100)
+    p_eb.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    p_eb.add_argument("--output-dir", type=str, default="results")
+    p_eb.add_argument("--compute-lpips", action="store_true")
+
     args = parser.parse_args()
 
     if args.command == "generate-eval-masks":
@@ -220,6 +374,16 @@ def main() -> None:
         cmd_evaluate(args)
     elif args.command == "demo":
         cmd_demo(args)
+    elif args.command == "download-deepfill":
+        cmd_download_deepfill(args)
+    elif args.command == "pretrain-adapters":
+        cmd_pretrain_adapters(args)
+    elif args.command == "verify-strategies":
+        cmd_verify_strategies(args)
+    elif args.command == "create-eval-set":
+        cmd_create_eval_set(args)
+    elif args.command == "eval-baseline":
+        cmd_eval_baseline(args)
     else:
         parser.print_help()
 

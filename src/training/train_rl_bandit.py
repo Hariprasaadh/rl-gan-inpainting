@@ -9,11 +9,18 @@ from stable_baselines3.common.callbacks import BaseCallback
 from src.utils.seed import seed_everything
 from src.utils.logger import setup_logger
 from src.data.dataset import InpaintingDataset
-from src.models.generator import InpaintingGenerator
 from src.models.discriminator import SNPatchGANDiscriminator
 from src.rl.actions import ACTION_NAMES
 from src.rl.env_bandit import InpaintingBanditEnv
 from src.training.trainer_utils import load_config, get_device, load_checkpoint
+
+# Prefer new model; fallback to legacy
+try:
+    from src.models.rl_inpainting_model import RLInpaintingModel as _GeneratorCls
+    _USE_RL_MODEL = True
+except ImportError:
+    from src.models.generator import InpaintingGenerator as _GeneratorCls
+    _USE_RL_MODEL = False
 
 
 class RLBanditLoggingCallback(BaseCallback):
@@ -81,51 +88,89 @@ def train_rl_bandit(config_path: str, override_timesteps: Optional[int] = None) 
 
     logger = setup_logger("train_rl_bandit", log_file=os.path.join(cfg["rl"]["log_dir"], "train.log"))
     logger.info("Initializing Experiment B: Frozen GAN + PPO Bandit Controller")
+    logger.info(f"Using generator class: {_GeneratorCls.__name__}")
 
     # Dataset
     train_dataset = InpaintingDataset(
         image_dir=cfg["data"].get("image_dir"),
         mask_dir=cfg["data"].get("mask_dir"),
-        image_size=cfg["data"].get("image_size", 128),
+        image_size=cfg["data"].get("image_size", 256),
         split="train",
         is_train=True,
         synthetic_size=cfg["data"].get("synthetic_size", 200),
     )
 
     # Models
-    generator = InpaintingGenerator(
-        base_channels=cfg["model"].get("base_channels", 32),
-        strategy_dim=cfg["model"].get("strategy_dim", 64),
-        latent_dim=cfg["model"].get("latent_dim", 256),
-    ).to(device)
+    if _USE_RL_MODEL:
+        generator = _GeneratorCls(
+            cnum=cfg["model"].get("cnum", 48),
+            cnum_in=cfg["model"].get("cnum_in", 5),
+            strategy_dim=cfg["model"].get("strategy_dim", 64),
+            latent_dim=cfg["model"].get("latent_dim", 256),
+        ).to(device)
+        # Load backbone
+        backbone_ckpt = cfg["model"].get("backbone_checkpoint")
+        if backbone_ckpt and os.path.exists(backbone_ckpt):
+            logger.info(f"Loading pretrained DeepFill backbone from: {backbone_ckpt}")
+            try:
+                generator.load_pretrained_backbone(backbone_ckpt)
+            except Exception as e:
+                logger.warning(f"Backbone load failed: {e}")
+        # Load adapters
+        adapters_ckpt = cfg["model"].get("adapters_checkpoint")
+        if adapters_ckpt and os.path.exists(adapters_ckpt):
+            logger.info(f"Loading pretrained adapters from: {adapters_ckpt}")
+            generator.load_adapters(adapters_ckpt)
+            # Freeze adapters during PPO (primary experiment). For joint fine-tuning, they stay trainable.
+            # Keep frozen as per plan
+            generator.freeze_adapters() if hasattr(generator, "freeze_adapters") else None
+        # Fallback legacy gan checkpoint if no backbone
+        elif cfg["model"].get("checkpoint_gan") and os.path.exists(cfg["model"].get("checkpoint_gan")):
+            logger.info(f"Fallback: loading legacy GAN checkpoint from {cfg['model'].get('checkpoint_gan')}")
+            try:
+                ckpt = load_checkpoint(cfg["model"].get("checkpoint_gan"), device=device)
+                generator.load_state_dict(ckpt.get("generator_state_dict", ckpt), strict=False)
+            except Exception as e:
+                logger.warning(f"Legacy checkpoint load failed: {e}")
+    else:
+        generator = _GeneratorCls(
+            base_channels=cfg["model"].get("base_channels", 32),
+            strategy_dim=cfg["model"].get("strategy_dim", 64),
+            latent_dim=cfg["model"].get("latent_dim", 256),
+        ).to(device)
+        ckpt_path = cfg["model"].get("checkpoint_gan")
+        if ckpt_path and os.path.exists(ckpt_path):
+            logger.info(f"Loading pretrained GAN baseline from: {ckpt_path}")
+            ckpt = load_checkpoint(ckpt_path, device=device)
+            generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
+            discriminator_state = ckpt.get("discriminator_state_dict")
+        else:
+            logger.warning(f"GAN checkpoint not found at '{ckpt_path}'. Training with initialized weights.")
 
     discriminator = SNPatchGANDiscriminator(
-        base_channels=cfg["model"].get("base_channels", 32) * 2,
+        base_channels=cfg["model"].get("base_channels", 32) * 2 if not _USE_RL_MODEL else 64,
     ).to(device)
 
-    # Load GAN weights if checkpoint available
-    ckpt_path = cfg["model"].get("checkpoint_gan")
-    if ckpt_path and os.path.exists(ckpt_path):
-        logger.info(f"Loading pretrained GAN baseline from: {ckpt_path}")
-        ckpt = load_checkpoint(ckpt_path, device=device)
-        generator.load_state_dict(ckpt["generator_state_dict"], strict=False)
-        discriminator.load_state_dict(ckpt["discriminator_state_dict"], strict=False)
-    else:
-        logger.warning(f"GAN checkpoint not found at '{ckpt_path}'. Training with initialized weights.")
+    # If legacy GAN checkpoint had discriminator, load it
+    if not _USE_RL_MODEL and "discriminator_state" in locals() and discriminator_state is not None:
+        try:
+            discriminator.load_state_dict(discriminator_state, strict=False)
+        except Exception:
+            pass
 
     # Create Gym Contextual Bandit Environment
-    reward_weights = tuple(cfg["rl"].get("reward_weights", [1.0, 1.0, 0.5, 0.5, 0.3]))
+    reward_weights = tuple(cfg["rl"].get("reward_weights", [1.0, 1.0, 0.5, 0.3, 0.1]))
     env = InpaintingBanditEnv(
         dataset=train_dataset,
         generator=generator,
         discriminator=discriminator,
         device=str(device),
         reward_weights=reward_weights,
-        compute_lpips=cfg["rl"].get("compute_lpips", False),
+        compute_lpips=cfg["rl"].get("compute_lpips", True),
     )
 
     # Instantiate PPO with gamma=0.0 for 1-step contextual bandit
-    timesteps = override_timesteps if override_timesteps is not None else cfg["rl"].get("total_timesteps", 5000)
+    timesteps = override_timesteps if override_timesteps is not None else cfg["rl"].get("total_timesteps", 10000)
     model = PPO(
         policy="MlpPolicy",
         env=env,
@@ -134,7 +179,7 @@ def train_rl_bandit(config_path: str, override_timesteps: Optional[int] = None) 
         batch_size=cfg["rl"].get("batch_size", 32),
         n_epochs=cfg["rl"].get("n_epochs", 4),
         gamma=cfg["rl"].get("gamma", 0.0),
-        ent_coef=cfg["rl"].get("ent_coef", 0.01),
+        ent_coef=cfg["rl"].get("ent_coef", 0.05),
         vf_coef=cfg["rl"].get("vf_coef", 0.5),
         max_grad_norm=cfg["rl"].get("max_grad_norm", 0.5),
         tensorboard_log=cfg["rl"]["log_dir"],
