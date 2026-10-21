@@ -80,5 +80,5 @@
   This is test-time supervised fine-tuning — not a valid generalization metric.
 
 - **Backbone**: DeepFillV2 pretrained on Places2 (frozen during adapter and RL training).
-- **Adapters**: Trained 3 epochs on COCO val2017 (5,000 images, synthetic masks).
+- **Adapters**: Trained 5 epochs on COCO val2017 (5,000 images, random stroke masks), per the config stored in `checkpoints/adapters/adapters_epoch_005.pt`.
 - **PPO**: Trained on COCO val2017 via stable-baselines3 PPO.

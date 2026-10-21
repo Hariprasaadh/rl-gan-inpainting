@@ -3,6 +3,12 @@
 
 > **Core Research Question:** *Can a Reinforcement Learning (PPO) controller dynamically choose optimal restoration strategies (Global, Local, Boundary, Texture) for a generative inpainter based on missing hole geometry and contextual difficulty, and does that adaptive control help more as the missing region gets harder to reconstruct?*
 
+> [!TIP]
+> 🎓 **Preparing to present or defend this project?** See the complete [Faculty Presentation & Defense Guide](FACULTY_PRESENTATION_GUIDE.md) for speaking scripts, slide outlines, mathematical derivations, live demo instructions, and tough Q&A answers. The written project report (BCSE432E) is in [`docs/`](docs/) as `RL_GAN_Inpainting_Report.pdf` / `.docx`.
+
+> [!NOTE]
+> 📖 **How it works:** step-by-step explanations of the model, training, evaluation and web studio are in [`docs/`](docs/README.md) ([Getting Started](docs/GETTING_STARTED.md) · [Architecture](docs/ARCHITECTURE.md) · [Training & RL](docs/TRAINING_AND_RL.md) · [Evaluation](docs/EVALUATION.md) · [Web Studio](docs/WEB_STUDIO.md)).
+
 ---
 
 ## 📑 Table of Contents
@@ -36,9 +42,9 @@
 Standard deep image inpainting models apply a single static generative policy to every missing region regardless of whether the defect is a thin scratch, an irregular boundary seam, a flat color patch, or a complex textured hole.
 
 **RL-GAN** introduces an adaptive reinforcement learning control loop on top of a generative inpainting backbone:
-1. **Cost-Free Bottleneck State Extraction**: Instead of running an auxiliary vision backbone, the state encoder taps directly into the DeepFill-v2 coarse bottleneck features (192 channels) and pools them into a 256-d latent embedding, combined with geometric mask descriptors and boundary gradient discontinuity (261-d total observation vector).
-2. **Specialized Strategy Adapters**: 4 lightweight convolution heads modulated via FiLM (Feature-wise Linear Modulation), pretrained with differentiated objectives targeting global context, hole reconstruction, boundary gradient continuity, and high-frequency Fourier spectrum fidelity.
-3. **PPO Contextual Bandit Controller**: A Stable-Baselines3 PPO agent trained on COCO val2017 to dynamically select the optimal adapter head per mask, trading off reconstruction gain against computational action cost.
+1. **Cost-Free Bottleneck State Extraction**: Instead of running an auxiliary vision backbone, the state encoder taps directly into the DeepFill-v2 coarse bottleneck features (96 channels = 2·`cnum`) and pools them into a 256-d latent embedding, combined with geometric mask descriptors and boundary gradient discontinuity (261-d total observation vector).
+2. **Specialized Strategy Adapters**: 4 lightweight residual convolution heads (operating on the RGB output of the backbone's refine stage) modulated via FiLM (Feature-wise Linear Modulation), pretrained with differentiated objectives targeting global context, hole reconstruction, boundary gradient continuity, and high-frequency (FFT) fidelity.
+3. **PPO Contextual Bandit Controller**: A Stable-Baselines3 PPO agent trained on COCO val2017 images to select an adapter head per mask, trading off a quality-improvement reward against a hand-set action cost.
 4. **Honest 4-Stage Ablation Framework**: Clear scientific decoupling between frozen backbone baselines (Stage A), fixed adapter baselines (Stage B), pure feed-forward RL inference (Stage C), and test-time ground-truth-supervised optimization (Stage D).
 
 ---
@@ -113,16 +119,16 @@ graph TD
 The state representation $s_t = [z_t, m_t, g_t]$ encapsulates semantic context, hole geometry, and boundary quality:
 
 1. **Latent Bottleneck Embedding** $z_t \in \mathbb{R}^{256}$:
-   Extracted directly from the frozen DeepFill-v2 coarse bottleneck ($4 \times c_{\text{num}} = 192$ channels) via adaptive average pooling and a lightweight projection head:
+   Extracted directly from the frozen DeepFill-v2 coarse bottleneck ($2 \times c_{\text{num}} = 96$ channels, output of the last dilated layer) via adaptive average pooling and a lightweight projection head:
    $$z_t = \text{EncoderHead}(\text{BottleneckFeature}(I_{\text{masked}}, M))$$
 2. **Mask Geometry Statistics** $m_t \in \mathbb{R}^{4}$:
    - **Missing Ratio**: $\frac{\sum M}{H \times W}$ (fraction of pixels damaged)
    - **Bounding Box Ratio**: $\frac{\text{Area}(\text{bbox}(M))}{H \times W}$
-   - **Number of Disjoint Regions**: Connected components via 8-connectivity
+   - **Number of Disjoint Regions**: Connected components via 8-connectivity, divided by 10 and clipped to $[0, 1]$
    - **Centroid Distance**: Normalized distance from mask center of mass to image center
 3. **Boundary Discontinuity Proxy** $g_t \in \mathbb{R}^{1}$:
-   Sobel edge gradient magnitude along the dilated mask transition ring:
-   $$g_t = \frac{1}{|\partial M|} \sum_{(x,y) \in \partial M} \|\nabla I_{\text{coarse}}(x,y)\|_2$$
+   Sobel edge gradient magnitude on a one-pixel ring just outside the hole, divided by 2 and clipped to $[0, 1]$:
+   $$g_t = \text{clip}\left(\frac{1}{|\partial M|} \sum_{(x,y) \in \partial M} \|\nabla I_{\text{coarse}}(x,y)\|_2 \Big/ 2,\; 0,\; 1\right)$$
 
 ### 2. Action Space $\mathcal{A}$ and Action Costs
 
@@ -146,19 +152,22 @@ where deltas are normalized to avoid PSNR domination:
 - $\Delta\widetilde{\text{SSIM}} = \text{clip}\left(\frac{\text{SSIM}_{\text{refined}} - \text{SSIM}_{\text{coarse}}}{0.10}, -2.0, 2.0\right)$
 - $\Delta\widetilde{\text{LPIPS}} = \text{clip}\left(\frac{\text{LPIPS}_{\text{refined}} - \text{LPIPS}_{\text{coarse}}}{0.10}, -2.0, 2.0\right)$
 - $\Delta\text{Disc} = D_{\text{patch}}(I_{\text{refined}}, M) - D_{\text{patch}}(I_{\text{coarse}}, M)$ (Spectral-Normalized PatchGAN confidence)
-- Default weights: $\alpha=1.0, \beta=1.0, \gamma=0.5, \delta=0.3, \lambda=0.1$
+- Total reward is clipped to $[-10, 10]$.
+- Training weights (`configs/rl_agent_bandit.yaml`): $\alpha=1.0, \beta=1.0, \gamma=0.5, \delta=0.3, \lambda=0.1$
 
 ### 4. Specialized Strategy Adapter Objectives
 
-During Phase 2 pretraining, the DeepFill-v2 backbone is frozen and the 4 adapter heads are trained with differentiated losses:
+During Phase 2 pretraining, the DeepFill-v2 backbone is frozen and the 4 adapter heads are trained with differentiated losses (as implemented in `src/training/pretrain_adapters.py`):
 
-$$\mathcal{L}_{\text{Global}} = \mathcal{L}_{1}^{\text{hole}} + \mathcal{L}_{1}^{\text{valid}} + 1.0 \cdot \mathcal{L}_{\text{VGG}}$$
+$$\mathcal{L}_{\text{Global}} = \mathcal{L}_{1}^{\text{hole}} + \mathcal{L}_{1}^{\text{valid}} + \mathcal{L}_{\text{VGG}}$$
 
-$$\mathcal{L}_{\text{Local}} = 6.0 \cdot \mathcal{L}_{1}^{\text{hole}} + 0.2 \cdot \mathcal{L}_{1}^{\text{valid}} + 0.5 \cdot \mathcal{L}_{\text{SSIM}}^{\text{hole}}$$
+$$\mathcal{L}_{\text{Local}} = 6.0 \cdot \mathcal{L}_{1}^{\text{hole}} + 0.2 \cdot \mathcal{L}_{1}^{\text{valid}} + 0.5 \cdot \mathcal{L}_{\text{SSIM-proxy}}^{\text{hole}}$$
 
 $$\mathcal{L}_{\text{Boundary}} = \left(\mathcal{L}_{1}^{\text{hole}} + \mathcal{L}_{1}^{\text{valid}}\right) + 2.0 \cdot \mathcal{L}_{\text{Sobel}}(\partial M)$$
 
-$$\mathcal{L}_{\text{Texture}} = \left(\mathcal{L}_{1}^{\text{hole}} + \mathcal{L}_{1}^{\text{valid}}\right) + 0.1 \cdot \|\mathcal{F}(\hat{I}) - \mathcal{F}(I_{\text{gt}})\|_{1} + 1.0 \cdot \mathcal{L}_{\text{VGG}}$$
+$$\mathcal{L}_{\text{Texture}} = \left(\mathcal{L}_{1}^{\text{hole}} + \mathcal{L}_{1}^{\text{valid}}\right) + 0.1 \cdot \|\mathcal{F}(\hat{I}) - \mathcal{F}(I_{\text{gt}})\|_{1} + \mathcal{L}_{\text{VGG}}$$
+
+Implementation details: $\mathcal{L}_{\text{VGG}}$ is computed by `PerceptualAndStyleLoss(perceptual_weight=0.05)`; $\mathcal{L}_{\text{SSIM-proxy}}$ is an L1 on 11×11 box-filtered means inside the hole; $\mathcal{L}_{\text{Sobel}}$ weights the Sobel-gradient L1 by 2.0 on the boundary ring and 0.2 elsewhere; the FFT term is computed over the whole image. Optimiser: Adam, lr $10^{-4}$, $\beta=(0.5, 0.999)$, 5 epochs, batch size 4.
 
 ---
 
@@ -170,7 +179,19 @@ rl-gan-inpainting/
 ├── main.py                            # Master CLI entrypoint (12 commands)
 ├── pyproject.toml                     # uv / pip build configuration & dependencies
 ├── requirements.txt                   # Flat pip dependency requirements
-├── RL-GAN-Inpainting-Implementation-Plan.md  # Comprehensive technical roadmap
+├── CLAUDE.md                          # Code-base guide for Claude Code (architecture, traps)
+├── FACULTY_PRESENTATION_GUIDE.md      # Defense / presentation guide (checked against the code)
+│
+├── docs/                              # Documentation and project report
+│   ├── README.md                      # Documentation index
+│   ├── GETTING_STARTED.md             # Setup and pipeline commands
+│   ├── ARCHITECTURE.md                # Model structure and data flow
+│   ├── TRAINING_AND_RL.md             # Adapter pretraining, bandit environment, reward, PPO
+│   ├── EVALUATION.md                  # Four-stage evaluation, metrics, results
+│   ├── WEB_STUDIO.md                  # Web studio UI and HTTP API
+│   ├── images/                        # Diagrams and figures used by the docs
+│   ├── RL_GAN_Inpainting_Report.pdf   # Final report (PDF)
+│   └── RL_GAN_Inpainting_Report.docx  # Final report (Word)
 │
 ├── configs/                           # Experiment & training configuration files
 │   ├── README.md                      # Detailed config documentation & schema guide
@@ -181,10 +202,9 @@ rl-gan-inpainting/
 │   └── joint_finetune.yaml            # Joint fine-tuning configuration
 │
 ├── data/                              # Datasets and deterministic evaluation masks
-│   ├── README.md                      # Data directory structure & mask severity guide
 │   ├── raw/
-│   │   ├── sample_images/             # Curated demo scenes (lakes, meadows, peaks)
-│   │   └── val2017/                   # COCO 2017 validation images (5,000 images)
+│   │   ├── sample_images/             # 6 demo photographs (used by the web studio and ablation)
+│   │   └── val2017/                   # COCO 2017 validation images (5,000; download with scripts/download_coco.py)
 │   └── masks/
 │       ├── fixed_eval_masks/          # 100 deterministic masks (25 per severity bucket)
 │       │   ├── 10-20pct/              # Severity 1: 10% - 20% missing area
@@ -197,10 +217,8 @@ rl-gan-inpainting/
 │   ├── pretrained/
 │   │   └── deepfillv2_places2.pth     # Places2-pretrained DeepFill-v2 backbone
 │   ├── adapters/
-│   │   └── adapters_final.pt          # Pretrained 4-strategy adapter weights
-│   ├── gan_baseline/
-│   │   ├── best_model.pt              # Best checkpoint from baseline GAN training
-│   │   └── gan_epoch_*.pt             # Training checkpoints (epochs 1-100)
+│   │   ├── adapters_final.pt          # Pretrained 4-strategy adapter weights (+ strategy embeddings, encoder head)
+│   │   └── adapters_epoch_*.pt        # Per-epoch adapter checkpoints (epochs 1-5)
 │   └── rl_agent_bandit/
 │       └── ppo_bandit_final.zip       # Trained PPO agent policy weights
 │
@@ -212,7 +230,7 @@ rl-gan-inpainting/
 │   │   ├── rl_inpainting_model.py     # Unified model: Backbone + Encoder + Adapters
 │   │   ├── discriminator.py           # SNPatchGAN discriminator with realism score
 │   │   ├── encoder.py                 # DeepFill bottleneck state encoder head
-│   │   ├── generator.py               # Legacy standalone inpainting generator
+│   │   ├── generator.py               # Earlier small from-scratch generator
 │   │   └── losses.py                  # Masked L1, Perceptual, Style, Adversarial losses
 │   ├── rl/
 │   │   ├── env_bandit.py              # Gymnasium Contextual Bandit environment (1-step)
@@ -223,8 +241,9 @@ rl-gan-inpainting/
 │   ├── training/
 │   │   ├── pretrain_adapters.py       # Pretrains 4 adapters with differentiated losses
 │   │   ├── train_rl_bandit.py         # PPO bandit trainer using Stable-Baselines3
-│   │   ├── train_rl_ablations.py      # Ablation experiments (C & D)
-│   │   ├── joint_finetune.py          # Joint backbone + adapter fine-tuning
+│   │   ├── train_rl_ablations.py      # Ablation experiments C & D (earlier small generator)
+│   │   ├── joint_finetune.py          # Joint fine-tuning (earlier small generator)
+│   │   ├── pretrain_gan.py            # From-scratch GAN pretraining (earlier small generator)
 │   │   └── trainer_utils.py           # Checkpointing, seed, config, device utils
 │   ├── data/
 │   │   ├── dataset.py                 # InpaintingDataset supporting real & synthetic pairs
@@ -235,7 +254,7 @@ rl-gan-inpainting/
 │   │   ├── severity_eval.py           # Severity-bucketed evaluation pipeline
 │   │   └── evaluate.py                # Comparative evaluation across models
 │   ├── baselines/
-│   │   └── lama_inference.py          # Reference LaMa-style ResNet-FFC inpainting baseline
+│   │   └── lama_inference.py          # LaMa-style ResNet-FFC reference network
 │   └── utils/
 │       ├── logger.py                  # Console & TensorBoard metric loggers
 │       └── seed.py                    # Deterministic reproducibility seeds
@@ -282,6 +301,8 @@ uv sync
 ```
 
 ### Method 2: Standard Python Virtual Environment
+
+Requires Python 3.10 or newer (the project was developed on Python 3.12 with PyTorch 2.6 + CUDA 12.4).
 
 ```bash
 python -m venv .venv
@@ -361,8 +382,8 @@ Run the pre-PPO safety checkpoint to guarantee that state embeddings vary across
 python main.py verify-strategies --data-dir data/raw/sample_images --num-images 5 --output-dir results/strategy_verify
 ```
 
-- **Pass Condition 1**: Mean pairwise L2 embedding distance $> 0.10$ (confirms encoder has not collapsed).
-- **Pass Condition 2**: No single strategy wins more than 80% of test scenes (confirms adapters are differentiated).
+- **Check 1 (state variance)**: the script prints the mean pairwise L2 distance between state embeddings across images (target $> 0.10$).
+- **Check 2 (strategy diversity)**: the gate passes when no single strategy has the best PSNR on more than 80% of test scenes (adapters are differentiated).
 
 ### Phase 4: PPO Contextual Bandit Policy Training
 
@@ -372,7 +393,7 @@ Train the Stable-Baselines3 PPO agent to observe the 261-d state vector and pick
 python main.py train-rl --config configs/rl_agent_bandit.yaml --timesteps 10000
 ```
 
-- **Key Hyperparameters**: $\gamma = 0.0$ (1-step contextual bandit), entropy coefficient $= 0.05$, learning rate $= 3 \times 10^{-4}$.
+- **Key Hyperparameters**: $\gamma = 0.0$ (1-step contextual bandit), entropy coefficient $= 0.05$, learning rate $= 3 \times 10^{-4}$. The config default is 5,000 timesteps; `--timesteps 10000` overrides it.
 - **Checkpoint Output**: `checkpoints/rl_agent_bandit/ppo_bandit_final.zip`
 - **TensorBoard Logs**: `tensorboard --logdir logs/rl_agent_bandit`
 
@@ -387,7 +408,7 @@ python main.py eval-baseline --data-dir data/raw/sample_images --mask-dir data/m
 ```bash
 python scripts/run_multi_image_test.py
 ```
-This produces comprehensive side-by-side visual panels (`results/demo_image_*.png`) and generates `results/multi_image_evaluation_report.md`.
+This produces side-by-side visual panels (`results/demo_image_*.png`) and generates `results/multi_image_evaluation_report.md`. It runs three test scenes with hand-designed masks.
 
 ---
 
@@ -400,6 +421,7 @@ This produces comprehensive side-by-side visual panels (`results/demo_image_*.pn
 | **Stage A** | **DeepFillV2 Backbone Only** | Pretrained Places2 weights without adapters or RL | ✅ Yes |
 | **Stage B** | **Fixed Adapter Baseline** | Default static selection: Action 0 (Global Completion) | ✅ Yes |
 | **Stage C** | **RL-GAN Adaptive Inference** | **PPO dynamically chooses adapter based on state** | ✅ **Yes (Core Research Test)** |
+| **Stage D** | PPO + test-time refinement | 400 AdamW steps using the ground-truth image in the loss | Oracle upper bound (uses ground truth) |
 
 ### Quantitative Comparison Across Representative Scenes
 
@@ -409,10 +431,13 @@ This produces comprehensive side-by-side visual panels (`results/demo_image_*.pn
 | **Lush Alpine Meadow & Peaks** | Large grass gradient, clouds | **Action 0: Global** | 33.72 dB / 0.9703 | 34.54 dB / 0.9734 | **34.54 dB / 0.9734** (+0.82 dB) | 39.65 dB / 0.9872 (+5.94 dB) |
 | **Sunset Mountain Horizon** | Sharp sky gradient, rock ridge | **Action 2: Boundary** | 40.58 dB / 0.9908 | 40.00 dB / 0.9900 | **36.80 dB / 0.9834** | 43.19 dB / 0.9946 (+2.61 dB) |
 
+Change relative to the backbone (Stage A): B = +0.76 / +0.82 / −0.58 dB; C = **−2.21 / +0.82 / −3.78 dB**; D = +2.78 / +5.94 / +2.61 dB (lake / meadow / sunset).
+
 ### Key Empirical Takeaways:
-1. **Dynamic Selection**: PPO selects different restoration strategies depending on the geometric difficulty and semantic content of the scene (e.g., Action 0 for broad meadows, Action 2 for mountain boundary ridges).
-2. **Scientifically Honest Comparison**: Single forward pass PPO inference (Stage C) operates in pure feed-forward mode without access to ground truth, unlike test-time optimization (Stage D) which demonstrates the theoretical upper-bound convergence of the adapter parameters.
-3. **Severe Mask Robustness**: As hole severity increases beyond 20%, strategy specialization prevents severe boundary artifacting.
+1. **Adapters refine the backbone**: the fixed Global adapter (Stage B) improves on the backbone by about +0.8 dB on two of the three scenes.
+2. **Per-scene strategy choice**: the policy chose Global on the meadow scene (so Stage C = Stage B) and Boundary on the lake and sunset scenes. In the five-image strategy verification the Local adapter had the best PSNR on 3 of 5 images and Global on 2 of 5.
+3. **Scientifically honest comparison**: Stage C is a single feed-forward pass without ground truth; Stage D uses the ground-truth image and shows the capacity of the adapters (37–43 dB).
+4. **Severity analysis**: `SeverityEvaluator` and the 100 fixed masks (25 per bucket) provide the framework for studying how adaptive control behaves as the hole grows.
 
 ---
 
@@ -429,14 +454,14 @@ Open **`http://localhost:7860`** in your browser.
 
 ### Features:
 - **Interactive Mask Canvas**: Draw custom irregular brush strokes with adjustable diameter or clear with one click.
-- **Preset Image Showcase**: Test on curated high-resolution landscape scenes (`alpine lake`, `meadow`, `sunset peaks`).
+- **Preset Image Showcase**: Test on the sample photographs in `data/raw/sample_images` (or upload your own); a random defect is pre-drawn on load.
 - **Dual Processing Modes**:
-  - ⚡ **Fast Inference (15 ms)**: Instant GPU forward pass using the PPO-selected strategy adapter.
-  - 🎯 **Precision Mode**: 60-step test-time detail refinement with AdamW on isolated adapter weights.
-- **Action Control**: Let the PPO Agent choose autonomously, or manually force any of the 4 actions (Global, Local, Boundary, Texture) to visually inspect strategy differences.
+  - ⚡ **Instant Forward Pass**: one GPU forward pass using the PPO-selected adapter. Measured latency on an RTX 3050 was about 235 ms per request (including an extra backbone-only baseline pass and PSNR/SSIM computation).
+  - 🎯 **Ultra-Precision**: 60 AdamW steps on the chosen adapter with an L1 loss against the original image, which shows how closely an adapter can fit a given image.
+- **Strategy choice**: the PPO agent chooses the adapter. The `/api/inpaint` endpoint also accepts an optional `action` (0–3) field to force a strategy.
 - **Interactive Split Slider**: Drag between before and after inpainting.
-- **5-Stage Pipeline Inspector**: View Ground Truth, Masked Input, Coarse Stage, Baseline GAN, and RL-GAN side-by-side.
-- **Live Telemetry Cards**: Monitor real-time latency, mask percentage, component counts, baseline PSNR/SSIM, and RL quality deltas.
+- **5-Stage Pipeline Inspector**: View Ground Truth, Masked Input, Coarse Stage, Backbone baseline, and RL-GAN output side-by-side.
+- **Live Telemetry Cards**: Chosen strategy, PSNR/SSIM versus the backbone baseline, damaged-area percentage and latency.
 
 ---
 
@@ -457,11 +482,11 @@ python main.py <command> [options]
 | `verify-strategies` | Verify strategy diversity & state variance before PPO | `--backbone-checkpoint`, `--adapters-checkpoint`, `--data-dir`, `--num-images` (5), `--state-only` |
 | `train-rl` | Train PPO Contextual Bandit controller | `--config` (`configs/rl_agent_bandit.yaml`), `--timesteps` |
 | `eval-baseline` | Evaluate DeepFill-v2 backbone baseline (no RL) | `--backbone-checkpoint`, `--data-dir`, `--mask-dir`, `--samples` (100), `--compute-lpips` |
-| `evaluate` | Full evaluation across models and severity buckets | `--data-dir`, `--mask-dir`, `--gan-checkpoint`, `--rl-checkpoint`, `--samples` (30) |
+| `evaluate` | Evaluation across models and severity buckets | `--data-dir`, `--mask-dir`, `--gan-checkpoint`, `--rl-checkpoint`, `--samples` (30) |
 | `demo` | Run demo on a sample image and save visual grid | `--image-dir`, `--gan-checkpoint`, `--rl-checkpoint`, `--output-dir`, `--sample-idx` (0) |
-| `train-gan` | Pretrain baseline GAN from scratch (legacy) | `--config` (`configs/pretrain_gan.yaml`), `--epochs` |
-| `train-ablations` | Train ablation experiments (C & D) | `--config`, `--mode` (`c`, `d`, `all`), `--timesteps` (2000) |
-| `joint-finetune` | Joint fine-tuning of backbone and adapters | `--config` (`configs/joint_finetune.yaml`), `--epochs` |
+| `train-gan` | Pretrain the earlier small baseline GAN from scratch | `--config` (`configs/pretrain_gan.yaml`), `--epochs` |
+| `train-ablations` | Ablation experiments C & D on the earlier small generator | `--config`, `--mode` (`c`, `d`, `all`), `--timesteps` (2000) |
+| `joint-finetune` | Joint fine-tuning on the earlier small generator | `--config` (`configs/joint_finetune.yaml`), `--epochs` |
 
 ---
 
@@ -471,9 +496,9 @@ Experiment hyperparameter files are stored in `configs/` (see [configs/README.md
 
 - **[configs/pretrain_adapters.yaml](configs/pretrain_adapters.yaml)**: Adapter pretraining configuration on COCO val2017 ($5$ epochs, Adam $\text{lr}=10^{-4}$).
 - **[configs/rl_agent_bandit.yaml](configs/rl_agent_bandit.yaml)**: Stable-Baselines3 PPO Contextual Bandit configuration ($\gamma=0.0$, entropy coefficient $0.05$, $261$-d state space, $4$ discrete actions).
-- **[configs/rl_agent_multistep.yaml](configs/rl_agent_multistep.yaml)**: Multi-step RL configuration featuring step penalties and explicit STOP action.
-- **[configs/pretrain_gan.yaml](configs/pretrain_gan.yaml)**: Standalone GAN baseline pretraining configuration.
-- **[configs/joint_finetune.yaml](configs/joint_finetune.yaml)**: Joint end-to-end fine-tuning parameters.
+- **[configs/rl_agent_multistep.yaml](configs/rl_agent_multistep.yaml)**: Multi-step RL configuration with an explicit STOP action (earlier small generator).
+- **[configs/pretrain_gan.yaml](configs/pretrain_gan.yaml)**: Standalone GAN baseline pretraining configuration (earlier small generator).
+- **[configs/joint_finetune.yaml](configs/joint_finetune.yaml)**: Joint fine-tuning parameters (earlier small generator).
 
 ---
 

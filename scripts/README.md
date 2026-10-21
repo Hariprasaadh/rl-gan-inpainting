@@ -25,6 +25,7 @@ Downloads and extracts the COCO 2017 Validation Set:
 ```bash
 python scripts/download_coco.py
 ```
+- Requires the `requests` package.
 - Automatically checks if `data/raw/val2017/` already contains $\ge 4,900$ images.
 - Validates zip integrity before extraction.
 - Displays a real-time progress bar.
@@ -35,6 +36,7 @@ Downloads the official DeepFill-v2 Places2 pretrained checkpoint from Google Dri
 ```bash
 python scripts/download_gan.py
 ```
+- Requires the `gdown` package (not part of `requirements.txt`; `pip install gdown`).
 - Target checkpoint: `checkpoints/pretrained/deepfillv2_places2.pth`.
 - Validates the downloaded file with `torch.load()` to confirm integrity.
 
@@ -42,10 +44,13 @@ python scripts/download_gan.py
 
 Generates 100 reproducible evaluation masks balanced across 4 severity tiers:
 ```bash
-python scripts/create_eval_set.py --image-dir data/raw/val2017 --output-dir data/masks/fixed_eval_masks --count 25 --image-size 256 --seed 42
+python main.py create-eval-set --image-dir data/raw/val2017 --output-dir data/masks/fixed_eval_masks --count 25 --image-size 256 --seed 42
+# or directly (note the different flag name):
+python scripts/create_eval_set.py --image-dir data/raw/val2017 --mask-output-dir data/masks/fixed_eval_masks --count 25 --image-size 256 --seed 42
 ```
 - Creates 25 masks per bucket: `10-20pct`, `20-40pct`, `40-60pct`, `60pctplus`.
-- Generates `data/masks/fixed_eval_manifest.json` pairing images to masks.
+- Generates `data/masks/fixed_eval_manifest.json` pairing the first 100 images (sorted) with masks, if the image directory exists.
+- The `main.py` entry point sets up the import path automatically.
 
 ### 4. `verify_strategies.py`
 
@@ -59,8 +64,9 @@ python scripts/verify_strategies.py \
   --output-dir results/strategy_verify
 ```
 **Validation Criteria:**
-- **State Embedding Diversity**: Mean pairwise L2 embedding distance must be $> 0.10$ (prevents encoder collapse).
-- **Strategy Output Diversity**: No single strategy adapter may win more than $80\%$ of test scenes.
+- **State Embedding Diversity**: prints the mean pairwise L2 distance between state embeddings across images (target $> 0.10$).
+- **Strategy Output Diversity**: the gate passes when no single adapter has the best PSNR on more than $80\%$ of the test images. Per-strategy PSNR/SSIM, the best-strategy counts, and a four-action reward sanity check are written to `results/strategy_verify/verify_results.json` and the console.
+- Add `--state-only` to run only the embedding check.
 
 ### 5. `evaluate_baseline.py`
 
@@ -73,7 +79,7 @@ python scripts/evaluate_baseline.py \
   --samples 100 \
   --output-dir results/baseline_test
 ```
-Computes mean and standard deviation for PSNR, SSIM, L1, and hole-interior L1 loss.
+Computes mean and standard deviation for PSNR, SSIM, LPIPS (add `--compute-lpips` for the VGG-based LPIPS), L1, and hole-interior L1 over `min(dataset size, --samples)` images. Outputs: `baseline_metrics.json` and `baseline_report.md` in `--output-dir`.
 
 ### 6. `run_multi_image_test.py`
 
@@ -85,5 +91,7 @@ python scripts/run_multi_image_test.py
   - **Stage A**: DeepFill-v2 Backbone Only
   - **Stage B**: Fixed Adapter 0 (Global Completion)
   - **Stage C**: PPO-selected adapter (pure feed-forward inference)
-  - **Stage D**: PPO-selected adapter + 400-step test-time refinement
+  - **Stage D**: PPO-selected adapter + 400-step test-time refinement (AdamW over all trainable parameters, with the ground-truth image in the loss; an oracle upper bound)
+- Uses three hand-designed masks (`build_controlled_mask`) on sample-image indices 1, 2 and 5.
+- Uses `checkpoints/pretrained/deepfillv2_places2.pth`, `checkpoints/adapters/adapters_final.pt` and `checkpoints/rl_agent_bandit/ppo_bandit_final.zip`.
 - Generates labeled dark-banner side-by-side comparison grids (`results/demo_image_1_alpine_lake.png`, etc.) and a quantitative markdown summary report.
