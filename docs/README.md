@@ -4,11 +4,13 @@ These pages explain how the RL-GAN adaptive inpainting system works, from the mo
 
 | Page | What it explains |
 |---|---|
+| [PROJECT_EXPLAINED.md](PROJECT_EXPLAINED.md) | The whole project in one place: a high-level overview followed by every component, formula, script and result in detail |
 | [GETTING_STARTED.md](GETTING_STARTED.md) | Setup, downloads and the commands to run the whole pipeline |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The model: frozen backbone, state vector, strategy adapters, data flow and code map |
 | [TRAINING_AND_RL.md](TRAINING_AND_RL.md) | Adapter pretraining, the contextual-bandit environment, the reward and PPO |
 | [EVALUATION.md](EVALUATION.md) | The four-stage evaluation, metrics, severity buckets and results |
 | [WEB_STUDIO.md](WEB_STUDIO.md) | The interactive studio: user interface, HTTP API and request flow |
+| [PRESENTATION_README.md](PRESENTATION_README.md) | RL vocabulary and a slide-by-slide explanation of `RL_GAN_Inpainting_Presentation.pptx` with talking points and likely questions |
 
 The written project report is available as [RL_GAN_Inpainting_Report.pdf](RL_GAN_Inpainting_Report.pdf) (Word version: [RL_GAN_Inpainting_Report.docx](RL_GAN_Inpainting_Report.docx)).
 
