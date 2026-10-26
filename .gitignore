@@ -1,63 +1,165 @@
-# Byte-compiled / optimized / DLL files
+# ==============================================================================
+# RL-GAN Inpainting Project - .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Byte-compiled / Optimized / Python Runtime
+# ------------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
 
-# Virtual environments
+# ------------------------------------------------------------------------------
+# 2. Virtual Environments & Package Managers
+# ------------------------------------------------------------------------------
 .venv/
 venv/
-env/
 ENV/
+env/
+env.bak/
+venv.bak/
+.conda/
+.direnv/
 
-
-# Package distributions & build metadata
-*.egg-info/
-rl_gan_inpainting.egg-info/
+# ------------------------------------------------------------------------------
+# 3. Distribution, Builds & Metadata
+# ------------------------------------------------------------------------------
 build/
 dist/
 develop-eggs/
 downloads/
 eggs/
 .eggs/
+lib/
+lib64/
 parts/
-var/
 sdist/
+var/
 wheels/
+share/python-wheels/
+*.egg-info/
+rl_gan_inpainting.egg-info/
+.installed.cfg
 *.egg
+MANIFEST
 
-# Tensorboard & Training Logs
-logs/
-*.log
-
-# Checkpoints (Large binary model weights)
+# ------------------------------------------------------------------------------
+# 4. Checkpoints & Large Model Weights (Pretrained models, checkpoints, weights)
+# ------------------------------------------------------------------------------
 checkpoints/
 *.pt
 *.pth
+*.ckpt
+*.bin
+*.onnx
+*.safetensors
+*.h5
+*.pkl
+*.pickle
+*.joblib
+*.pb
+*.tflite
 *.zip
+*.tar
 *.tar.gz
+*.tgz
+*.7z
+*.rar
 
-# Datasets & raw archives (do not commit raw datasets)
+# ------------------------------------------------------------------------------
+# 5. Training Logs, Profilers & Experiment Trackers
+# ------------------------------------------------------------------------------
+logs/
+runs/
+wandb/
+mlruns/
+lightning_logs/
+*.log
+*.tfevents.*
+events.out.tfevents.*
+
+# ------------------------------------------------------------------------------
+# 6. Datasets & Raw Archives (Do not commit bulky datasets)
+# ------------------------------------------------------------------------------
 data/raw/val2017/
 data/raw/train2017/
-data/raw/*.zip
-data/raw/*.tar.gz
 data/raw/places2/
+data/raw/celeba/
 data/raw/celeba_hq/
+data/raw/paris_streetview/
+data/raw/imagenet/
+data/raw/*.zip
+data/raw/*.tar*
+data/raw/*.7z
+data/raw/*.gz
+data/processed/
+data/downloaded/
+data/interim/
 
-# Testing & Coverage
+# Ensure preset sample images for web demo remain tracked
+!data/raw/sample_images/
+
+# ------------------------------------------------------------------------------
+# 7. Test Runs, Temporary Masks & Throwaway Results
+# ------------------------------------------------------------------------------
+data/masks/*_test/
+data/masks/temp*/
+data/masks/*_temp/
+data/masks/tmp/
+
+results/*_test/
+results/test_*/
+results/tmp/
+results/temp/
+results/*.tmp
+results/test_web_verify.png
+results/eval.log
+
+# ------------------------------------------------------------------------------
+# 8. Testing & Code Quality Tools
+# ------------------------------------------------------------------------------
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+.tox/
+.nox/
 
-# Editor / IDE configurations
+# ------------------------------------------------------------------------------
+# 9. IDE, Editor & OS Configuration Files
+# ------------------------------------------------------------------------------
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+
+# Operating System files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# Temporary outputs
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Temporary & scratch files
 *.tmp
-results/test_web_verify.png
-
+*.temp
+*.bak
+scratch/
