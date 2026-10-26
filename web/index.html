@@ -40,12 +40,25 @@
       <section class="panel control-panel">
         <div class="panel-header">
           <h2>1. Source & Mask Studio</h2>
-          <span class="badge">Canvas</span>
+          <span class="badge" id="canvasBadge">Canvas</span>
+        </div>
+
+        <!-- Workflow Mode Switcher -->
+        <div class="workflow-toggle-bar">
+          <button class="workflow-btn active" id="btnModeSynthetic" data-mode="synthetic" title="Evaluate on clean image with artificial hole">
+            <span>🎯 Benchmark Mode</span>
+          </button>
+          <button class="workflow-btn" id="btnModeRestoration" data-mode="restoration" title="Restore authentic torn or scratched photograph">
+            <span>🩹 Photo Restoration</span>
+          </button>
         </div>
 
         <!-- Presets Selection Bar -->
         <div class="presets-section">
-          <label class="section-label">Select Sample Photograph or Upload</label>
+          <div class="section-header-row">
+            <label class="section-label" id="presetSectionLabel">Select Sample Photograph or Upload</label>
+            <span class="preset-tip" id="presetTip">Try damaged_torn_photo.jpg for restoration!</span>
+          </div>
           <div class="preset-cards" id="presetCards">
             <!-- Populated dynamically via JS -->
           </div>
@@ -74,7 +87,8 @@
           </div>
           <div class="button-group">
             <button class="btn btn-sm btn-ghost" id="btnClearMask" title="Clear Mask">Clear</button>
-            <button class="btn btn-sm btn-outline" id="btnRandomMask" title="Add Organic Defect">✨ Random Mask</button>
+            <button class="btn btn-sm btn-outline" id="btnRandomMask" title="Add Organic Defect">🎲 Random Mask</button>
+            <button class="btn btn-sm btn-accent" id="btnAutoDetectTears" title="Auto-detect paper tears and scratches on photo">⚡ Auto-Detect Tears</button>
           </div>
         </div>
 
@@ -123,8 +137,8 @@
                 <span class="arrow-right">▶</span>
               </div>
             </div>
-            <div class="slider-label label-left">Damaged Input</div>
-            <div class="slider-label label-right">RL-GAN Reconstructed</div>
+            <div class="slider-label label-left" id="sliderLabelLeft">Damaged Input</div>
+            <div class="slider-label label-right" id="sliderLabelRight">RL-GAN Reconstructed</div>
           </div>
         </div>
 
@@ -132,23 +146,23 @@
         <div class="view-container" id="pipelineViewContainer" style="display: none;">
           <div class="pipeline-grid">
             <div class="pipeline-card">
-              <span class="pipe-tag">1. Ground Truth</span>
+              <span class="pipe-tag" id="pipeTag1">1. Ground Truth</span>
               <img id="pipeGt" alt="GT">
             </div>
             <div class="pipeline-card">
-              <span class="pipe-tag">2. Masked Input</span>
+              <span class="pipe-tag" id="pipeTag2">2. Masked Input</span>
               <img id="pipeMasked" alt="Masked">
             </div>
             <div class="pipeline-card">
-              <span class="pipe-tag">3. Coarse Pass</span>
+              <span class="pipe-tag" id="pipeTag3">3. Coarse Pass</span>
               <img id="pipeCoarse" alt="Coarse">
             </div>
             <div class="pipeline-card">
-              <span class="pipe-tag">4. Baseline GAN</span>
+              <span class="pipe-tag" id="pipeTag4">4. Baseline GAN</span>
               <img id="pipeBaseline" alt="Baseline">
             </div>
             <div class="pipeline-card highlight">
-              <span class="pipe-tag">5. RL-GAN (Adaptive)</span>
+              <span class="pipe-tag" id="pipeTag5">5. RL-GAN (Adaptive)</span>
               <img id="pipeRl" alt="RL-GAN">
             </div>
           </div>
@@ -173,22 +187,22 @@
           <!-- Quantitative Metrics Table -->
           <div class="metrics-row">
             <div class="metric-stat">
-              <span class="stat-title">RL-GAN PSNR</span>
+              <span class="stat-title" id="statTitle1">RL-GAN PSNR</span>
               <span class="stat-value" id="psnrRlVal">-- dB</span>
               <span class="stat-sub" id="psnrBaseSub">Baseline: -- dB</span>
             </div>
             <div class="metric-stat">
-              <span class="stat-title">Structural Similarity</span>
+              <span class="stat-title" id="statTitle2">Structural Similarity</span>
               <span class="stat-value" id="ssimRlVal">--</span>
               <span class="stat-sub" id="ssimBaseSub">Baseline: --</span>
             </div>
             <div class="metric-stat">
-              <span class="stat-title">Damaged Area</span>
+              <span class="stat-title" id="statTitle3">Damaged Area</span>
               <span class="stat-value" id="coverageVal">-- %</span>
-              <span class="stat-sub">Mask Surface</span>
+              <span class="stat-sub" id="statSub3">Mask Surface</span>
             </div>
             <div class="metric-stat">
-              <span class="stat-title">Inference Time</span>
+              <span class="stat-title" id="statTitle4">Inference Time</span>
               <span class="stat-value" id="latencyVal">-- ms</span>
               <span class="stat-sub">NVIDIA RTX 3050</span>
             </div>

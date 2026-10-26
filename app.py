@@ -9,7 +9,9 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 from PIL import Image, ImageOps
 import numpy as np
+import cv2
 import torch
+import torch.nn.functional as F
 
 # Prefer RLInpaintingModel (backbone + adapters); fall back to legacy
 try:
@@ -103,6 +105,35 @@ def base64_to_mask(b64_str: str, size=(256, 256)) -> np.ndarray:
     return mask_np
 
 
+def detect_photo_defects(pil_img: Image.Image, sensitivity: str = "medium") -> np.ndarray:
+    """Auto-detect paper tears, rips, and bright scratches on damaged photos.
+
+    Returns a 2D uint8 numpy array with shape (256, 256) where 1 indicates defect (hole).
+    """
+    img_np = np.array(pil_img.resize((256, 256), Image.BILINEAR))
+    hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
+    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+    # 1. White/near-white torn paper areas (high brightness, low saturation)
+    thresh_v = 220 if sensitivity == "high" else 230 if sensitivity == "medium" else 240
+    thresh_s = 55 if sensitivity == "high" else 45 if sensitivity == "medium" else 35
+    white_tear = (hsv[:, :, 2] > thresh_v) & (hsv[:, :, 1] < thresh_s)
+
+    # 2. Crease/scratch detection via morphological top-hat (bright linear scratches)
+    kernel_line = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+    tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel_line)
+    scratch_thresh = 50 if sensitivity == "high" else 65 if sensitivity == "medium" else 80
+    scratches = (tophat > scratch_thresh) & (hsv[:, :, 1] < 60)
+
+    combined = white_tear | scratches
+    kernel_clean = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    cleaned = cv2.morphologyEx(combined.astype(np.uint8), cv2.MORPH_OPEN, kernel_clean)
+    kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    dilated = cv2.dilate(cleaned, kernel_dilate, iterations=1)
+
+    return dilated
+
+
 class RLGANRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory="web", **kwargs)
@@ -157,6 +188,40 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+
+        if parsed.path == "/api/detect-defects":
+            content_length = int(self.headers["Content-Length"])
+            post_data = self.rfile.read(content_length)
+            req = json.loads(post_data.decode("utf-8"))
+
+            img_b64 = req.get("image")
+            sensitivity = req.get("sensitivity", "medium")
+            if not img_b64:
+                self.send_error(400, "Missing image data")
+                return
+
+            try:
+                pil_img = base64_to_pil(img_b64)
+                mask_np = detect_photo_defects(pil_img, sensitivity=sensitivity)
+                mask_pil = Image.fromarray((mask_np * 255).astype(np.uint8), mode="L")
+                coverage = float(np.mean(mask_np > 0) * 100)
+                num_labels, _ = cv2.connectedComponents(mask_np)
+
+                resp = {
+                    "mask": pil_to_base64(mask_pil, format="PNG"),
+                    "coverage": round(coverage, 1),
+                    "num_defects": max(0, num_labels - 1)
+                }
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(resp).encode("utf-8"))
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.send_error(500, f"Defect detection failed: {str(e)}")
+            return
+
         if parsed.path == "/api/inpaint":
             content_length = int(self.headers["Content-Length"])
             post_data = self.rfile.read(content_length)
@@ -166,6 +231,7 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
             mask_b64 = req.get("mask")
             mode = req.get("mode", "precision") # "fast" or "precision"
             force_action = req.get("action", None) # None for RL agent
+            is_restoration = bool(req.get("is_restoration", False) or req.get("workflow_mode") == "restoration")
 
             if not img_b64 or not mask_b64:
                 self.send_error(400, "Missing image or mask data")
@@ -213,7 +279,7 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                 with torch.no_grad():
                     gan_raw = generator(masked_tensor, mask_tensor, strategy=None)
                     gan_comp = feather_composite(img_tensor, gan_raw["completed"], mask_tensor, calibrate_color=False)
-                    base_metrics = compute_image_metrics(gan_comp, img_tensor, compute_lpips=False)
+                    base_metrics = None if is_restoration else compute_image_metrics(gan_comp, img_tensor, compute_lpips=False)
 
                 # 4. Inpainting Execution
                 if mode == "precision":
@@ -226,9 +292,18 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                         for _ in range(60):
                             opt.zero_grad()
                             out = generator(masked_tensor, mask_tensor, strategy=chosen_action)
-                            loss_c, _ = l1_fn(out["coarse"], img_tensor, mask_tensor)
-                            loss_r, _ = l1_fn(out["refined"], img_tensor, mask_tensor)
-                            tot = loss_c + loss_r
+                            if is_restoration:
+                                # For real damaged photos, optimize unmasked context fidelity & boundary smoothness
+                                loss_c = F.l1_loss(out["coarse"] * (1.0 - mask_tensor), img_tensor * (1.0 - mask_tensor))
+                                loss_r = F.l1_loss(out["refined"] * (1.0 - mask_tensor), img_tensor * (1.0 - mask_tensor))
+                                diff_i = torch.abs(out["refined"][:, :, :, 1:] - out["refined"][:, :, :, :-1])
+                                diff_j = torch.abs(out["refined"][:, :, 1:, :] - out["refined"][:, :, :-1, :])
+                                loss_tv = (diff_i * mask_tensor[:, :, :, 1:]).mean() + (diff_j * mask_tensor[:, :, 1:, :]).mean()
+                                tot = loss_c + loss_r + 0.1 * loss_tv
+                            else:
+                                loss_c, _ = l1_fn(out["coarse"], img_tensor, mask_tensor)
+                                loss_r, _ = l1_fn(out["refined"], img_tensor, mask_tensor)
+                                tot = loss_c + loss_r
                             tot.backward()
                             opt.step()
                         generator.eval()
@@ -237,7 +312,7 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                             coarse_comp = masked_tensor + coarse * mask_tensor
                             rl_refined = generator.refine(coarse_comp, mask_tensor, strategy=chosen_action)
                             rl_comp = feather_composite(img_tensor, rl_refined, mask_tensor, calibrate_color=False)
-                            rl_metrics = compute_image_metrics(rl_comp, img_tensor, compute_lpips=False)
+                            rl_metrics = None if is_restoration else compute_image_metrics(rl_comp, img_tensor, compute_lpips=False)
                     finally:
                         generator.load_state_dict(orig_state)
                         generator.eval()
@@ -248,7 +323,7 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                         coarse_comp = masked_tensor + coarse * mask_tensor
                         rl_refined = generator.refine(coarse_comp, mask_tensor, strategy=chosen_action)
                         rl_comp = feather_composite(img_tensor, rl_refined, mask_tensor, calibrate_color=False)
-                        rl_metrics = compute_image_metrics(rl_comp, img_tensor, compute_lpips=False)
+                        rl_metrics = None if is_restoration else compute_image_metrics(rl_comp, img_tensor, compute_lpips=False)
 
                 elapsed_ms = int((time.time() - t0) * 1000)
 
@@ -259,32 +334,45 @@ class RLGANRequestHandler(SimpleHTTPRequestHandler):
                 img_baseline_pil = Image.fromarray(denormalize_image(gan_comp[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
                 img_rl_pil = Image.fromarray(denormalize_image(rl_comp[0], to_uint8=True).permute(1, 2, 0).cpu().numpy())
 
-                delta_psnr = rl_metrics["psnr"] - base_metrics["psnr"]
-                delta_ssim = rl_metrics["ssim"] - base_metrics["ssim"]
-
-                # Accurately label whether PPO guided the action or we fell back
-                result_mode = "PPO + Refinement" if (mode == "precision" and rl_agent is not None) else \
-                              "PPO" if rl_agent is not None else \
-                              "Adapter (no PPO)"
+                if is_restoration:
+                    delta_psnr = None
+                    delta_ssim = None
+                    psnr_base = None
+                    ssim_base = None
+                    psnr_rl = None
+                    ssim_rl = None
+                    result_mode = f"Restoration ({'PPO Guided' if rl_agent is not None else 'Default Adapter'})"
+                else:
+                    delta_psnr = round(rl_metrics["psnr"] - base_metrics["psnr"], 2)
+                    delta_ssim = round(rl_metrics["ssim"] - base_metrics["ssim"], 4)
+                    psnr_base = round(base_metrics["psnr"], 2)
+                    ssim_base = round(base_metrics["ssim"], 4)
+                    psnr_rl = round(rl_metrics["psnr"], 2)
+                    ssim_rl = round(rl_metrics["ssim"], 4)
+                    result_mode = "PPO + Refinement" if (mode == "precision" and rl_agent is not None) else \
+                                  "PPO" if rl_agent is not None else \
+                                  "Adapter (no PPO)"
 
                 resp = {
+                    "is_restoration": is_restoration,
                     "action_id": chosen_action,
                     "action_name": action_name,
                     "result_mode": result_mode,
                     "rl_agent_available": rl_agent is not None,
                     "elapsed_ms": elapsed_ms,
-                    "psnr_base": round(base_metrics["psnr"], 2),
-                    "ssim_base": round(base_metrics["ssim"], 4),
-                    "psnr_rl": round(rl_metrics["psnr"], 2),
-                    "ssim_rl": round(rl_metrics["ssim"], 4),
-                    "delta_psnr": round(delta_psnr, 2),
-                    "delta_ssim": round(delta_ssim, 4),
+                    "psnr_base": psnr_base,
+                    "ssim_base": ssim_base,
+                    "psnr_rl": psnr_rl,
+                    "ssim_rl": ssim_rl,
+                    "delta_psnr": delta_psnr,
+                    "delta_ssim": delta_ssim,
                     "stats": {
                         "missing_ratio": round(stats["missing_ratio"] * 100, 1),
                         "num_regions": stats["num_regions"],
                     },
                     "images": {
                         "ground_truth": pil_to_base64(img_gt_pil),
+                        "original_damaged": pil_to_base64(img_gt_pil),
                         "masked": pil_to_base64(img_masked_pil),
                         "coarse": pil_to_base64(img_coarse_pil),
                         "baseline": pil_to_base64(img_baseline_pil),
